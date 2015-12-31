@@ -90,6 +90,7 @@ namespace TestProject
 
             debugger.DumpParseTable();
             debugger.Write(Console.Write);
+
             Console.ReadKey();
         }
     }
