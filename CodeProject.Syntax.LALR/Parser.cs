@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -148,13 +149,7 @@ namespace CodeProject.Syntax.LALR
             }
         }
 
-        public ParseTable ParseTable
-        {
-            get
-            {
-                return _parseTable;
-            }
-        }
+        public ParseTable ParseTable { get { return _parseTable; } }
 
 
         /// <summary>
@@ -371,7 +366,7 @@ namespace CodeProject.Syntax.LALR
                 for (int nToken = 0; nToken < _grammar.Tokens.Length; nToken++)
                 {
                     bool bAdded = false;
-                    int nPrecedence = int.MinValue;
+                    int nPrecedence = Int32.MinValue;
                     int nGoto = GotoLR0(nState, nToken, ref bAdded, ref nPrecedence);
 
                     _lrGotos[nState][nToken] = nGoto;
@@ -645,11 +640,11 @@ namespace CodeProject.Syntax.LALR
                         }
                     }
 
-                    int nMaxPrecedence = int.MinValue;
+                    int nMaxPrecedence = Int32.MinValue;
                     var importantActions = new List<Action>();
                     foreach (Action action in actions)
                     {
-                        int nActionPrecedence = int.MinValue;
+                        int nActionPrecedence = Int32.MinValue;
                         if (action.ActionType == ActionType.Shift)
                         {
                             nActionPrecedence = _gotoPrecedence[nStateID][nToken]; //nToken will never be -1
@@ -731,6 +726,68 @@ namespace CodeProject.Syntax.LALR
                     _productionDerivation.Add(oGroup.Derivation);
                 }
                 nPrecedence--;
+            }
+        }
+
+        /// <summary>
+        /// Based on: http://www.goldparser.org/doc/engine-pseudo/parse-token.htm
+        /// </summary>
+        /// <param name="input">Input tokens to parse</param>
+        /// <param name="debugger">Enables debugging support</param>
+        /// <returns>The reduced program tree on acceptance or the erroneous token</returns>
+        public Token ParseInput(IEnumerable<Token> input, Debug debugger)
+        {
+            const int initState = 0;
+            var tokenStack = new Stack<Token>();
+            var state = initState;
+
+            using (var tokenIterator = new LATokenIterator(input))
+            {
+                while (true)
+                {
+                    var token = tokenIterator.LookAhead;
+                    var action = ParseTable.Actions[state, token.ID + 1];
+                    debugger.DumpParsingState(state, tokenStack, token, action);
+
+                    switch (action.ActionType)
+                    {
+                        case ActionType.Shift:
+                            state = action.ActionParameter;
+                            token.State = state;
+                            tokenStack.Push(token);
+                            tokenIterator.MoveNext();
+                            break;
+
+                        case ActionType.Reduce:
+                            var prod = Productions[action.ActionParameter];
+                            var nChildren = prod.Right.Length;
+                            var children = new Token[nChildren];
+                            for (var i = 0; i < nChildren; i++)
+                            {
+                                children[nChildren - i - 1] = tokenStack.Pop();
+                            }
+                            var reduction = new Token(prod.Left, children);
+                            var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
+                            state = ParseTable.Actions[lastState, prod.Left + 1].ActionParameter;
+                            reduction.State = prod.Left;
+                            tokenStack.Push(reduction);
+                            if (tokenStack.Count == 1 && tokenStack.Peek().ID == 0)
+                            {
+                                return tokenStack.Pop();
+                            }
+                            break;
+
+                        case ActionType.Error:
+                            return token;
+
+                        case ActionType.ErrorRR:
+                            throw new InvalidOperationException("Reduce-Reduce conflict in grammar: " + token);
+
+                        case ActionType.ErrorSR:
+                            throw new InvalidOperationException("Shift-Reduce conflict in grammar: " + token);
+                    }
+                    debugger.Flush();
+                }
             }
         }
 

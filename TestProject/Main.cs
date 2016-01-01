@@ -43,7 +43,7 @@ namespace TestProject
                         //e -> ( e )
                         new Production{
                             Left = 1,
-                            Right =  new []{7, 1, 8}
+                            Right = new []{7, 1, 8}
                         }
                     }
                 },
@@ -86,11 +86,33 @@ namespace TestProject
 
             // generate the parse table
             var parser = new Parser(grammar);
-            var debugger = new Debug(parser);
+            var debugger = new Debug(parser, Console.Write, Console.Error.Write);
 
             debugger.DumpParseTable();
-            debugger.Write(Console.Write);
+            debugger.Flush();
 
+            var input = new[]
+                {
+                    new Token(7, "("),
+                    new Token(6, 1),
+                    new Token(5, "/"),
+                    new Token(6, 5),
+                    new Token(8, ")"),
+                    new Token(2, "+"),
+                    new Token(6, 2),
+                    new Token(4, "*"),
+                    new Token(7, "("),
+                    new Token(6, 3),
+                    new Token(3, "-"),
+                    new Token(6, 4),
+                    new Token(8, ")"),
+                };
+
+            var result = parser.ParseInput(input, debugger);
+            if (result.State < 0)
+            {
+                debugger.WriteErrorToken("Error while parsing: ", result);
+            }
             Console.ReadKey();
         }
     }

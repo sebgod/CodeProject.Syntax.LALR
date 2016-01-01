@@ -13,25 +13,32 @@ namespace CodeProject.Syntax.LALR
 
         private readonly Parser _parser;
         private readonly StringBuilder _builder;
+        private readonly Action<string> _infoWriter;
+        private readonly Action<string> _errorWriter;
 
-        public Debug(Parser parser)
+        public Debug(Parser parser, Action<string> infoWriter = null, Action<string> errorWriter = null)
         {
             _parser = parser;
             _builder = new StringBuilder();
+            _infoWriter = infoWriter;
+            _errorWriter = errorWriter ?? _infoWriter;
         }
 
         [Conditional(Condition)]
-        public void Clear()
+        public void Flush()
         {
+            if (_infoWriter != null)
+            {
+                _infoWriter(ToString());
+            }
             _builder.Clear();
         }
 
-        [Conditional(Condition)]
-        public void Write(Action<string> writer)
+        public void WriteErrorToken(string message, Token token)
         {
-            if (writer != null)
+            if (_errorWriter != null)
             {
-                writer(ToString());
+                _errorWriter(message + token + Environment.NewLine);
             }
         }
 
@@ -81,7 +88,6 @@ namespace CodeProject.Syntax.LALR
 
                 nPosition++;
             }
-            _builder.AppendLine();
         }
 
         /// <summary>
@@ -96,6 +102,7 @@ namespace CodeProject.Syntax.LALR
             foreach (int nLR0Item in state)
             {
                 DumpLR0Item(_parser.LR0Items[nLR0Item]);
+                _builder.AppendLine();
             }
         }
 
@@ -109,6 +116,7 @@ namespace CodeProject.Syntax.LALR
             foreach (var item in _parser.LR0Items)
             {
                 DumpLR0Item(item);
+                _builder.AppendLine();
             }
         }
 
@@ -362,6 +370,13 @@ namespace CodeProject.Syntax.LALR
                 _builder.AppendLine()
                     .HzEdge(nTokens, nState + 1 < nStates ? BoxDrawing.Edge.Middle : BoxDrawing.Edge.Bottom);
             }
+        }
+
+        [Conditional(Condition)]
+        public void DumpParsingState(int state, IEnumerable<Token> tokenStack, Token token, Action action)
+        {
+            _builder.AppendFormat("state={0,-3} la={1,-4} {2,-10} {3}", state, token, action,
+                                  string.Join(", ", tokenStack.Select(p => p.ToString()))).AppendLine();
         }
     }
 }
