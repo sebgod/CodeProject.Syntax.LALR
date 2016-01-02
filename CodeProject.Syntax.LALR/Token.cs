@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Linq;
 
@@ -53,6 +53,7 @@ namespace CodeProject.Syntax.LALR
             {
                 return stringContent;
             }
+
             var enumerable = content as IEnumerable;
             return enumerable != null
                        ? "[" + string.Join(" ", enumerable.Cast<object>().Select(ContentToString)) + "]"

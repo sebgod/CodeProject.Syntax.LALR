@@ -19,138 +19,49 @@ namespace CodeProject.Syntax.LALR
 
         readonly Grammar _grammar;
         readonly List<Production> _productions;
-        readonly List<int> _terminals;
-        readonly List<int> _nonterminals;
+        readonly HashSet<int> _terminals;
+        readonly HashSet<int> _nonterminals;
 
-        readonly List<Dictionary<int, List<LALRPropogation>>> _lalrPropogations;
+        readonly List<IDictionary<int, IList<LALRPropogation>>> _lalrPropogations;
 
         readonly ParseTable _parseTable;
 
+// ReSharper disable ReturnTypeCanBeEnumerable.Global
         readonly List<int> _productionPrecedence;
         readonly List<Derivation> _productionDerivation;
 
-        public HashSet<int>[] FirstSets
-        {
-            get
-            {
-                return _firstSets;
-            }
-        }
+        public HashSet<int>[] FirstSets { get { return _firstSets; } }
 
-        public List<LR0Item> LR0Items
-        {
-            get
-            {
-                return _lr0Items;
-            }
-        }
+        public IList<LR0Item> LR0Items { get { return _lr0Items; } }
 
-        public List<LR1Item> LR1Items
-        {
-            get
-            {
-                return _lr1Items;
-            }
-        }
+        public IList<LR1Item> LR1Items { get { return _lr1Items; } }
 
-        public List<HashSet<int>> LR0States
-        {
-            get
-            {
-                return _lr0States;
-            }
-        }
+        public ICollection<HashSet<int>> LR0States { get { return _lr0States; } }
 
-        public List<HashSet<int>> LR0Kernels
-        {
-            get
-            {
-                return _lr0Kernels;
-            }
-        }
+        public ICollection<HashSet<int>> LR0Kernels { get { return _lr0Kernels; } }
 
-        public List<HashSet<int>> LALRStates
-        {
-            get
-            {
-                return _lalrStates;
-            }
-        }
+        public ICollection<HashSet<int>> LALRStates { get { return _lalrStates; } }
 
-        public List<int[]> LRGotos
-        {
-            get
-            {
-                return _lrGotos;
-            }
-        }
+        public ICollection<int[]> LRGotos { get { return _lrGotos; } }
 
-        public List<int[]> GotoPrecedence
-        {
-            get
-            {
-                return _gotoPrecedence;
-            }
-        }
+        public ICollection<int[]> GotoPrecedence { get { return _gotoPrecedence; } }
 
-        public List<Production> Productions
-        {
-            get
-            {
-                return _productions;
-            }
-        }
+        public IList<Production> Productions { get { return _productions; } }
 
-        public List<int> Terminals
-        {
-            get
-            {
-                return _terminals;
-            }
-        }
+        public ISet<int> Terminals { get { return _terminals; } }
 
-        public List<int> NonTerminals
-        {
-            get
-            {
-                return _nonterminals;
-            }
-        }
+        public ISet<int> NonTerminals { get { return _nonterminals; } }
 
-        public List<Dictionary<int, List<LALRPropogation>>> LALRPropogations
-        {
-            get
-            {
-                return _lalrPropogations;
-            }
-        }
+        public IList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations { get { return _lalrPropogations; } }
 
-        public List<int> ProductionPrecedence
-        {
-            get
-            {
-                return _productionPrecedence;
-            }
-        }
+        public ICollection<int> ProductionPrecedence { get { return _productionPrecedence; } }
 
-        public List<Derivation> ProductionDerivation
-        {
-            get
-            {
-                return _productionDerivation;
-            }
-        }
+        public ICollection<Derivation> ProductionDerivation { get { return _productionDerivation; } }
 
-        public Grammar Grammar
-        {
-            get
-            {
-                return _grammar;
-            }
-        }
+        public Grammar Grammar { get { return _grammar; } }
 
         public ParseTable ParseTable { get { return _parseTable; } }
-
+// ReSharper restore ReturnTypeCanBeEnumerable.Global
 
         /// <summary>
         /// Adds a propogation to the propogation table
@@ -159,11 +70,11 @@ namespace CodeProject.Syntax.LALR
         {
             while (_lalrPropogations.Count <= nLR0SourceState)
             {
-                _lalrPropogations.Add(new Dictionary<int, List<LALRPropogation>>());
+                _lalrPropogations.Add(new Dictionary<int, IList<LALRPropogation>>());
             }
 
-            Dictionary<int, List<LALRPropogation>> propogationsForState = _lalrPropogations[nLR0SourceState];
-            List<LALRPropogation> propogationList;
+            var propogationsForState = _lalrPropogations[nLR0SourceState];
+            IList<LALRPropogation> propogationList;
             if (!propogationsForState.TryGetValue(nLR0SourceItem, out propogationList))
             {
                 propogationList = new List<LALRPropogation>();
@@ -585,7 +496,8 @@ namespace CodeProject.Syntax.LALR
         /// <summary>
         /// Converts an LR0 State to an LR0 Kernel consisting of only the 'initiating' LR0 Items in the state
         /// </summary>
-        public void ConvertLR0ItemsToKernels()
+
+        void ConvertLR0ItemsToKernels()
         {
             foreach (var lr0State in _lr0States)
             {
@@ -734,8 +646,9 @@ namespace CodeProject.Syntax.LALR
         /// </summary>
         /// <param name="input">Input tokens to parse</param>
         /// <param name="debugger">Enables debugging support</param>
+        /// <param name="trimReductions">If true (default), trim reductions of the form L -> R, where R is a non-terminal</param>
         /// <returns>The reduced program tree on acceptance or the erroneous token</returns>
-        public Token ParseInput(IEnumerable<Token> input, Debug debugger)
+        public Token ParseInput(IEnumerable<Token> input, Debug debugger, bool trimReductions = true)
         {
             const int initState = 0;
             var tokenStack = new Stack<Token>();
@@ -761,12 +674,20 @@ namespace CodeProject.Syntax.LALR
                         case ActionType.Reduce:
                             var prod = Productions[action.ActionParameter];
                             var nChildren = prod.Right.Length;
-                            var children = new Token[nChildren];
-                            for (var i = 0; i < nChildren; i++)
+                            Token reduction;
+                            if (trimReductions && nChildren == 1 && _nonterminals.Contains(prod.Right[0]))
                             {
-                                children[nChildren - i - 1] = tokenStack.Pop();
+                                reduction = new Token(prod.Left, tokenStack.Pop().Content);
                             }
-                            var reduction = new Token(prod.Left, children);
+                            else
+                            {
+                                var children = new Token[nChildren];
+                                for (var i = 0; i < nChildren; i++)
+                                {
+                                    children[nChildren - i - 1] = tokenStack.Pop();
+                                }
+                                reduction = new Token(prod.Left, children);
+                            }
                             var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
                             state = ParseTable.Actions[lastState, prod.Left + 1].ActionParameter;
                             reduction.State = prod.Left;
@@ -803,9 +724,10 @@ namespace CodeProject.Syntax.LALR
             _lr0States = new List<HashSet<int>>();
             _lr0Kernels = new List<HashSet<int>>();
             _lalrStates = new List<HashSet<int>>();
-            _terminals = new List<int>();
-            _nonterminals = new List<int>();
-            _lalrPropogations = new List<Dictionary<int, List<LALRPropogation>>>();
+            _terminals = new HashSet<int>();
+
+            _nonterminals = new HashSet<int>();
+            _lalrPropogations = new List<IDictionary<int, IList<LALRPropogation>>>();
             _grammar = grammar;
             _productions = new List<Production>();
             _productionDerivation = new List<Derivation>();
