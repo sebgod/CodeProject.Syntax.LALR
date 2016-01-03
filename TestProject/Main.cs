@@ -66,10 +66,11 @@ namespace TestProject
                     new Token(6, 3),
                     new Token(3, "-"),
                     new Token(6, 4),
-                    new Token(8, ")"),
+                    new Token(8, ")")
                 };
 
-            var result = parser.ParseInput(input, debugger);
+            var result =
+                parser.ParseInputAsync(new AsyncLATokenIterator(new AsyncEnumerableWrapper(input)), debugger).Result;
             if (result.State < 0)
             {
                 debugger.WriteErrorToken("Error while parsing: ", result);

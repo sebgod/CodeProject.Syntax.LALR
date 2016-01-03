@@ -35,10 +35,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="AsyncEnumerableWrapper.cs" />
     <Compile Include="BoxDrawing.cs" />
     <Compile Include="Debug.cs" />
     <Compile Include="Grammar.cs" />
-    <Compile Include="LATokenIterator.cs" />
+    <Compile Include="IAsyncIterator.cs" />
+    <Compile Include="IAsyncLAIterator.cs" />
+    <Compile Include="AsyncLACharIterator.cs" />
+    <Compile Include="AsyncLATokenIterator.cs" />
     <Compile Include="LRItems.cs" />
     <Compile Include="Parser.cs" />
     <Compile Include="ParseTable.cs" />

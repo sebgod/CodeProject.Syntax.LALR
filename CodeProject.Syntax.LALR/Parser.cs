@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CodeProject.Syntax.LALR
 {
@@ -643,21 +644,21 @@ namespace CodeProject.Syntax.LALR
         /// <summary>
         /// Based on: http://www.goldparser.org/doc/engine-pseudo/parse-token.htm
         /// </summary>
-        /// <param name="input">Input tokens to parse</param>
+        /// <param name="tokenIterator">Token iterator which will be owned by the callee</param>
         /// <param name="debugger">Enables debugging support</param>
         /// <param name="trimReductions">If true (default), trim reductions of the form L -> R, where R is a non-terminal</param>
         /// <returns>The reduced program tree on acceptance or the erroneous token</returns>
-        public Token ParseInput(IEnumerable<Token> input, Debug debugger, bool trimReductions = true)
+        public async Task<Token> ParseInputAsync(IAsyncLAIterator<Token> tokenIterator, Debug debugger, bool trimReductions = true)
         {
             const int initState = 0;
             var tokenStack = new Stack<Token>();
             var state = initState;
 
-            using (var tokenIterator = new LATokenIterator(input))
+            using (tokenIterator)
             {
                 while (true)
                 {
-                    var token = tokenIterator.LookAhead;
+                    var token = await tokenIterator.LookAheadAsync();
                     var action = ParseTable.Actions[state, token.ID + 1];
                     debugger.DumpParsingState(state, tokenStack, token, action);
 
@@ -667,7 +668,7 @@ namespace CodeProject.Syntax.LALR
                             state = action.ActionParameter;
                             token.State = state;
                             tokenStack.Push(token);
-                            tokenIterator.MoveNext();
+                            await tokenIterator.MoveNextAsync();
                             break;
 
                         case ActionType.Reduce:
