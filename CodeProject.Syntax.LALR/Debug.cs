@@ -24,6 +24,7 @@ namespace CodeProject.Syntax.LALR
             _errorWriter = errorWriter ?? _infoWriter;
         }
 
+// ReSharper disable MemberCanBePrivate.Global
         [Conditional(Condition)]
         public void Flush()
         {
@@ -376,7 +377,39 @@ namespace CodeProject.Syntax.LALR
         public void DumpParsingState(int state, IEnumerable<Token> tokenStack, Token token, Action action)
         {
             _builder.AppendFormat("state={0,-3} la={1,-4} {2,-10} {3}", state, token, action,
-                                  string.Join(", ", tokenStack.Select(p => p.ToString()))).AppendLine();
+                                  string.Join(", ", tokenStack.Select(TokenInfo))).AppendLine();
         }
+
+        public string TokenInfo(Token token)
+        {
+            var info = new StringBuilder(20);
+            TokenInfo(token, info);
+            return info.ToString();
+        }
+
+        private void TokenInfo(Token token, StringBuilder info)
+        {
+            var name = GetTokenName(token.ID);
+            if (_parser.NonTerminals.Contains(token.ID))
+            {
+                var reduction = (Reduction) token.Content;
+                var production = _parser.Productions[reduction.Production];
+                info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
+                for (var i = 0; i < reduction.Children.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        info.Append(' ');
+                    }
+                    TokenInfo(reduction.Children[i], info);
+                }
+                info.Append(']');
+            }
+            else
+            {
+                info.Append(token);
+            }
+        }
+// ReSharper restore MemberCanBePrivate.Global
     }
 }

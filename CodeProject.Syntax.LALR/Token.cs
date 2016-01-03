@@ -62,11 +62,7 @@ namespace CodeProject.Syntax.LALR
 
         public override string ToString()
         {
-#if TRACE
-            return string.Format("{0}{1} {2}", ID, State >= 0 ? "#" + State : "", ContentToString(Content));
-#else
             return ContentToString(Content);
-#endif
         }
     }
 }

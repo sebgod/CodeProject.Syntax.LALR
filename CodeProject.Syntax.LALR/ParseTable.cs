@@ -61,9 +61,16 @@ namespace CodeProject.Syntax.LALR
     /// <summary>
     /// Directs the parser on which action to perform at a given state on a particular input
     /// </summary>
-    public class ParseTable
+    public struct ParseTable
     {
-        public Action[,] Actions { get; set; }
+        private readonly Action[,] _actions;
+
+        public Action[,] Actions { get { return _actions; } }
+
+        public ParseTable(int states, int tokens)
+        {
+            _actions = new Action[states, tokens + 1];
+        }
 
         public int States
         {

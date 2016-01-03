@@ -42,6 +42,7 @@
     <Compile Include="LRItems.cs" />
     <Compile Include="Parser.cs" />
     <Compile Include="ParseTable.cs" />
+    <Compile Include="Reduction.cs" />
     <Compile Include="Token.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />

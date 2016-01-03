@@ -3,9 +3,9 @@ using CodeProject.Syntax.LALR;
 
 namespace TestProject
 {
-    static class MainClass
+    internal static class MainClass
     {
-        public static void Main (string[] args)
+        public static void Main(string[] args)
         {
             //
             // the following program produces a parse table for the following grammar
@@ -20,69 +20,30 @@ namespace TestProject
             // e -> e + e
             // e -> e - e
             //
-            var grammar = new Grammar();
-            grammar.Tokens = new[]{"S'", "e", "+", "-", "*", "/", "i", "(", ")"};
-
-            grammar.PrecedenceGroups = new[]
-            {
-                new PrecedenceGroup
-                {
-                    Derivation = Derivation.None,
-                    Productions = new[]
-                    {
-                        //S' -> e
-                        new Production{
-                            Left = 0,
-                            Right = new[]{1}
-                        },
-                        //e -> i
-                        new Production{
-                            Left = 1,
-                            Right = new []{6}
-                        },
-                        //e -> ( e )
-                        new Production{
-                            Left = 1,
-                            Right = new []{7, 1, 8}
-                        }
-                    }
-                },
-                new PrecedenceGroup
-                {
-                    Derivation = Derivation.LeftMost,
-                    Productions = new[]
-                    {
-                        //e -> e * e
-                        new Production{
-                            Left = 1,
-                            Right = new []{1, 4, 1}
-                        },
-                        //e -> e / e
-                        new Production{
-                            Left = 1,
-                            Right = new []{1, 5, 1}
-                        }
-                    }
-                },
-                new PrecedenceGroup
-                {
-                    //productions are left associative and bind less tightly than * or /
-                    Derivation = Derivation.LeftMost,
-                    Productions = new[]
-                    {
-                        //e -> e + e
-                        new Production{
-                            Left = 1,
-                            Right = new []{1, 2, 1}
-                        },
-                        //e -> e - e
-                        new Production{
-                            Left = 1,
-                            Right = new []{1, 3, 1}
-                        }
-                    }
-                }
-            };
+            var grammar = new Grammar(
+                new[] {"S'", "e", "+", "-", "*", "/", "i", "(", ")"},
+                new PrecedenceGroup(Derivation.None,
+                                    //S' -> e
+                                    new Production(0, 1),
+                                    //e -> i
+                                    new Production(1, 6),
+                                    //e -> ( e )
+                                    new Production(1, 7, 1, 8)
+                    ),
+                new PrecedenceGroup(Derivation.LeftMost,
+                                    //e -> e * e
+                                    new Production(1, 1, 4, 1),
+                                    //e -> e / e
+                                    new Production(1, 1, 5, 1)
+                    ),
+                // productions are left associative and bind less tightly than * or /
+                new PrecedenceGroup(Derivation.LeftMost,
+                                    //e -> e + e
+                                    new Production(1, 1, 2, 1),
+                                    //e -> e - e
+                                    new Production(1, 1, 3, 1)
+                    )
+                );
 
             // generate the parse table
             var parser = new Parser(grammar);
@@ -112,6 +73,10 @@ namespace TestProject
             if (result.State < 0)
             {
                 debugger.WriteErrorToken("Error while parsing: ", result);
+            }
+            else
+            {
+                Console.WriteLine("Accept: {0}", debugger.TokenInfo(result));
             }
             Console.ReadKey();
         }

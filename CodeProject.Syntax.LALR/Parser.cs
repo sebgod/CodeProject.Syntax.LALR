@@ -381,7 +381,7 @@ namespace CodeProject.Syntax.LALR
         /// <summary>
         /// Initializes the propogation table, and initial state of the LALR table
         /// </summary>
-        void InitLALRTables()
+        int InitLALRTables()
         {
             int nLR0State = 0;
             for (var i = 0; i < _lr0States.Count; i++ )
@@ -429,6 +429,7 @@ namespace CodeProject.Syntax.LALR
 
                 nLR0State++;
             }
+            return _lalrStates.Count;
         }
 
         /// <summary>
@@ -523,7 +524,6 @@ namespace CodeProject.Syntax.LALR
         /// </summary>
         void GenerateParseTable()
         {
-            _parseTable.Actions = new Action[_lalrStates.Count, _grammar.Tokens.Length + 1];
             for (int nStateID = 0; nStateID < _lalrStates.Count; nStateID++)
             {
                 var lalrState = _lalrStates[nStateID];
@@ -534,7 +534,6 @@ namespace CodeProject.Syntax.LALR
                     if (nToken >= 0 && _lrGotos[nStateID][nToken] >= 0)
                     {
                         actions.Add(new Action(ActionType.Shift, _lrGotos[nStateID][nToken]));
-
                     }
 
                     foreach (int nLR1ItemID in lalrState)
@@ -672,12 +671,13 @@ namespace CodeProject.Syntax.LALR
                             break;
 
                         case ActionType.Reduce:
-                            var prod = Productions[action.ActionParameter];
-                            var nChildren = prod.Right.Length;
+                            var nProduction = action.ActionParameter;
+                            var production = Productions[nProduction];
+                            var nChildren = production.Right.Length;
                             Token reduction;
-                            if (trimReductions && nChildren == 1 && _nonterminals.Contains(prod.Right[0]))
+                            if (trimReductions && nChildren == 1 && _nonterminals.Contains(production.Right[0]))
                             {
-                                reduction = new Token(prod.Left, tokenStack.Pop().Content);
+                                reduction = new Token(production.Left, tokenStack.Pop().Content);
                             }
                             else
                             {
@@ -686,11 +686,11 @@ namespace CodeProject.Syntax.LALR
                                 {
                                     children[nChildren - i - 1] = tokenStack.Pop();
                                 }
-                                reduction = new Token(prod.Left, children);
+                                reduction = new Token(production.Left, new Reduction(nProduction, children));
                             }
                             var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
-                            state = ParseTable.Actions[lastState, prod.Left + 1].ActionParameter;
-                            reduction.State = prod.Left;
+                            state = ParseTable.Actions[lastState, production.Left + 1].ActionParameter;
+                            reduction.State = production.Left;
                             tokenStack.Push(reduction);
                             if (tokenStack.Count == 1 && tokenStack.Peek().ID == 0)
                             {
@@ -732,16 +732,18 @@ namespace CodeProject.Syntax.LALR
             _productions = new List<Production>();
             _productionDerivation = new List<Derivation>();
             _productionPrecedence = new List<int>();
-            _firstSets = new HashSet<int>[_grammar.Tokens.Length];
-            _parseTable = new ParseTable();
+            var nTokens = _grammar.Tokens.Length;
+            _firstSets = new HashSet<int>[nTokens];
 
             PopulateProductions();
             InitSymbols();
             GenerateLR0Items();
             ComputeFirstSets();
             ConvertLR0ItemsToKernels();
-            InitLALRTables();
+            var nLalrStates = InitLALRTables();
             CalculateLookAheads();
+
+            _parseTable = new ParseTable(nLalrStates, nTokens);
             GenerateParseTable();
         }
     }

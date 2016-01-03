@@ -1,4 +1,5 @@
-using System;
+using System.Collections.Generic;
+
 namespace CodeProject.Syntax.LALR
 {
     /// <summary>
@@ -14,29 +15,56 @@ namespace CodeProject.Syntax.LALR
     /// <summary>
     /// A grammatical production
     /// </summary>
-    public class Production
+    public struct Production
     {
-        public int Left{get;set;}
-        public int[] Right{get;set;}
+        private readonly int _left;
+        private readonly int[] _right;
+
+        public int Left { get { return _left; } }
+        public int[] Right { get { return _right; } }
+
+        public Production(int left, params int[] right)
+        {
+            _left = left;
+            _right = right;
+        }
     };
 
     /// <summary>
     /// A collection of productions at a particular precedence
     /// </summary>
-    public class PrecedenceGroup
+    public struct PrecedenceGroup
     {
-        public Derivation Derivation {get;set;}
-        public Production[] Productions{get;set;}
-    };
+        private readonly Production[] _productions;
+        private readonly Derivation _derivation;
+
+        public Derivation Derivation { get { return _derivation; } }
+        public IEnumerable<Production> Productions { get { return _productions; } }
+
+        public PrecedenceGroup(Derivation derivation, params Production[] productions)
+        {
+            _productions = productions;
+            _derivation = derivation;
+        }
+    }
 
     /// <summary>
     /// All of the information required to make a Parser
     /// </summary>
-    public class Grammar
+    public struct Grammar
     {
-        public string[] Tokens{get;set;}
+        private readonly string[] _tokens;
+        private readonly PrecedenceGroup[] _precedenceGroups;
 
-        public PrecedenceGroup[] PrecedenceGroups {get;set;}
+        public string[] Tokens { get { return _tokens; } }
+
+        public PrecedenceGroup[] PrecedenceGroups { get { return _precedenceGroups; } }
+
+        public Grammar(string[] tokens, params PrecedenceGroup[] precedenceGroups)
+        {
+            _tokens = tokens;
+            _precedenceGroups = precedenceGroups;
+        }
     };
 }
 
