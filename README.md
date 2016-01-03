@@ -6,4 +6,4 @@
 
 # License
 
-[Code Project Open License (CPOL)](LICENSE.html)
+[Code Project Open License (CPOL)](http://www.codeproject.com/info/cpol10.aspx)
