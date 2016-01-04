@@ -17,7 +17,7 @@ namespace CodeProject.Syntax.LALR
         private readonly StringBuilder _chars;
         private int _index;
 
-        private AsyncLACharIterator(TextReader reader, int capacity = 1024)
+        public AsyncLACharIterator(TextReader reader, int capacity = 1024)
         {
             _reader = reader;
             _chars = new StringBuilder(capacity);
@@ -29,28 +29,31 @@ namespace CodeProject.Syntax.LALR
             _reader.Dispose();
         }
 
-        public Task<int> LookAheadAsync()
+        public async Task<int> LookAheadAsync()
+        {
+            return await CodepointAtIndex(1);
+        }
+
+        public async Task<int> CurrentAsync()
+        {
+            return await CodepointAtIndex();
+        }
+
+        private async Task<int> CodepointAtIndex(int lookAhead = 0)
         {
             if (_index == NotInitialised)
             {
                 throw new InvalidOperationException("Did not call MoveNextAsync() yet!");
             }
-            throw new NotImplementedException("LookAheadAsync");
-        }
-
-        public async Task<int> CurrentAsync()
-        {
-            switch (_index)
+            if (_index + lookAhead >= _chars.Length && await RefillBuffer() <= 0)
             {
-                case NotInitialised:
-                    throw new InvalidOperationException("Did not call MoveNextAsync() yet!");
-                case EOF:
-                    return _index;
+                return EOF;
             }
+
             char unit;
-            while ((unit = _chars[_index]) == '\r')
+            while ((unit = _chars[_index + lookAhead]) == '\r')
             {
-                if (_index + 1 < _chars.Length)
+                if (_index + lookAhead + 1 < _chars.Length)
                 {
                     _index++;
                 }
@@ -62,7 +65,7 @@ namespace CodeProject.Syntax.LALR
             if (char.IsHighSurrogate(unit))
             {
                 // RefillBuffer guarantees that a high surrogate will never be the last code unit
-                var low = _chars[_index++];
+                var low = _chars[++_index + lookAhead];
                 return char.IsLowSurrogate(low) ? char.ConvertToUtf32(unit, low) : ReplacementCodepoint;
             }
             return char.IsLowSurrogate(unit) ? ReplacementCodepoint : unit;
@@ -70,7 +73,7 @@ namespace CodeProject.Syntax.LALR
 
         public async Task<bool> MoveNextAsync()
         {
-            if (_index >= 0 && _index++ < _chars.Capacity)
+            if (_index >= 0 && ++_index < _chars.Length)
             {
                 return true;
             }
@@ -83,18 +86,24 @@ namespace CodeProject.Syntax.LALR
             _chars.Clear();
             var readBuffer = new char[_chars.Capacity >> 1];
             var read = await _reader.ReadAsync(readBuffer, 0, readBuffer.Length);
-            // TODO count lines + offs
-            _chars.Append(readBuffer);
-            if (read > 0 && char.IsHighSurrogate(_chars[read - 1]))
+
+            if (read > 0)
             {
-                var readLow = await _reader.ReadAsync(readBuffer, 0, 1);
-                if (readLow > 0)
+                // TODO count lines + offs
+                _chars.Append(readBuffer, 0, read);
+
+                if (char.IsHighSurrogate(_chars[read - 1]))
                 {
-                    _chars.Append(readBuffer);
-                    read += readLow;
+                    var readLow = await _reader.ReadAsync(readBuffer, 0, 1);
+                    if (readLow > 0)
+                    {
+                        _chars.Append(readBuffer, 0, readLow);
+                        read += readLow;
+                    }
                 }
+                return read;
             }
-            return read > 0 ? read : EOF;
+            return EOF;
         }
 
         public void Reset()

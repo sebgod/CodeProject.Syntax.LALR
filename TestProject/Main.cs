@@ -1,6 +1,9 @@
 using System;
+using System.IO;
 using CodeProject.Syntax.LALR;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TestProject
 {
@@ -12,6 +15,20 @@ namespace TestProject
             Console.OutputEncoding = Encoding.Unicode;
             Console.Out.Flush();
 
+            var cts = new CancellationTokenSource();
+
+            Console.CancelKeyPress += (s, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            MainAsync(args, cts.Token).GetAwaiter().GetResult();
+            Console.ReadKey();
+        }
+
+        static async Task MainAsync(string[] args, CancellationToken token)
+        {
             //
             // the following program produces a parse table for the following grammar
             // for infix expressions, and appropriately applies operator precedence of
@@ -54,10 +71,21 @@ namespace TestProject
             var parser = new Parser(grammar);
             var debugger = new Debug(parser, Console.Write, Console.Error.Write);
 
+            var inputString = "(1/5)+2*(3-4)";
+            using (var charReader = new AsyncLACharIterator(new StringReader(inputString)))
+            {
+                while (charReader.MoveNextAsync().Result)
+                {
+                    var current = char.ConvertFromUtf32(await charReader.CurrentAsync());
+                    var la = charReader.LookAheadAsync().Result;
+                    Console.WriteLine("current={0} la={1}", current, la == AsyncLACharIterator.EOF ? "$" : char.ConvertFromUtf32(la));
+                }
+            }
+
             debugger.DumpParseTable();
             debugger.Flush();
 
-            var input = new[]
+            var inputTokens = new[]
                 {
                     new Token(7, "("),
                     new Token(6, 1),
@@ -74,8 +102,7 @@ namespace TestProject
                     new Token(8, ")")
                 };
 
-            var result =
-                parser.ParseInputAsync(new AsyncLATokenIterator(new AsyncEnumerableWrapper(input)), debugger).Result;
+            var result = await parser.ParseInputAsync(new AsyncLATokenIterator(new AsyncEnumerableWrapper(inputTokens)), debugger);
             if (result.State < 0)
             {
                 debugger.WriteErrorToken("Error while parsing: ", result);
@@ -84,7 +111,6 @@ namespace TestProject
             {
                 Console.WriteLine("Accept: {0}", debugger.TokenInfo(result));
             }
-            Console.ReadKey();
         }
     }
 }
