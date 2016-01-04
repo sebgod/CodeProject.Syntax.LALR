@@ -1,5 +1,6 @@
 using System;
 using CodeProject.Syntax.LALR;
+using System.Text;
 
 namespace TestProject
 {
@@ -7,6 +8,10 @@ namespace TestProject
     {
         public static void Main(string[] args)
         {
+            Console.InputEncoding = Encoding.Unicode;
+            Console.OutputEncoding = Encoding.Unicode;
+            Console.Out.Flush();
+
             //
             // the following program produces a parse table for the following grammar
             // for infix expressions, and appropriately applies operator precedence of
