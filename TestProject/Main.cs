@@ -30,40 +30,51 @@ namespace TestProject
 
         private static object RewriteConstBinaryExpr(int production, Token[] children)
         {
-            var left = children[0].Content as Token;
-            var op = children[1].ID;
-            var right = children[2].Content as Token;
-            if (left != null && right != null && left.ID == 6 && right.ID == 6)
+            if (children.Length != 3 || children[0].ContentType != ContentType.Nested || children[2].ContentType != ContentType.Nested)
             {
-                var result = null as object;
-                var leftInt = (int)left.Content;
-                var rightInt = (int)left.Content;
+                return null;
+            }
+            var left = children[0].Nested;
+            var op = children[1];
+            var right = children[2].Nested;
+            var result = null as object;
+
+            if (left.ID == 6 && right.ID == 6)
+            {
+                var leftInt = (int) left.Content;
+                var rightInt = (int) right.Content;
                 try
                 {
                     checked
                     {
-                        switch (op)
+                        switch (op.ID)
                         {
-                            case 2: result = leftInt + rightInt; break;
-                            case 3: result = leftInt - rightInt; break;
-                            case 4: result = leftInt * rightInt; break;
-                            case 5: result = leftInt / rightInt; break;
+                            case 2:
+                                result = leftInt + rightInt;
+                                break;
+                            case 3:
+                                result = leftInt - rightInt;
+                                break;
+                            case 4:
+                                result = leftInt*rightInt;
+                                break;
+                            case 5:
+                                result = leftInt/rightInt;
+                                break;
                         }
                     }
                 }
                 catch (OverflowException overflow)
                 {
-                    return new Reduction(production, left, children[1], right, new Token(6, overflow.Message) { State = -1 });
+                    return new Reduction(production, left, op, right,
+                                         new Token(6, overflow.Message) {State = -1});
                 }
-                if (result != null)
-                {
-                    return new Token(6, result);
-                }
+                return result != null ? new Token(6, result) : null;
             }
             return null;
         }
 
-        static async Task MainAsync(string[] args, CancellationToken token)
+        private static async Task MainAsync(string[] args, CancellationToken token)
         {
             //
             // the following program produces a parse table for the following grammar
@@ -79,14 +90,16 @@ namespace TestProject
             // e -> e - e
             //
             var grammar = new Grammar(
-                new[] { "S'", "e", "+", "-", "*", "/", "i", "(", ")" },
+                new[] {"S'", "e", "+", "-", "*", "/", "i", "(", ")"},
                 new PrecedenceGroup(Derivation.None,
                                     //S' -> e
                                     new Production(0, (_, x) => x[0], 1),
                                     //e -> i
-                                    new Production(1, (_, x) => x[0], 6),
+                                    new Production(1, (_, x) => x.Length == 1 ? x[0] : null, 6),
                                     //e -> ( e )
-                                    new Production(1, (_, x) => x[1].Content as Token, 7, 1, 8)
+                                    new Production(1,
+                                                   (_, x) => x[1].ContentType == ContentType.Nested ? x[1].Nested : null,
+                                                   7, 1, 8)
                     ),
                 new PrecedenceGroup(Derivation.LeftMost,
                                     //e -> e * e
@@ -107,14 +120,15 @@ namespace TestProject
             var parser = new Parser(grammar);
             var debugger = new Debug(parser, Console.Write, Console.Error.Write);
 
-            var inputString = "(1/5)+2*(3-4)";
+            const string inputString = "(1/5)+2*(3-4)";
             using (var charReader = new AsyncLACharIterator(new StringReader(inputString)))
             {
                 while (charReader.MoveNextAsync().Result)
                 {
                     var current = char.ConvertFromUtf32(await charReader.CurrentAsync());
                     var la = charReader.LookAheadAsync().Result;
-                    Console.WriteLine("current={0} la={1}", current, la == AsyncLACharIterator.EOF ? "$" : char.ConvertFromUtf32(la));
+                    Console.WriteLine("current={0} la={1}", current,
+                                      la == AsyncLACharIterator.EOF ? "$" : char.ConvertFromUtf32(la));
                 }
             }
 
@@ -122,47 +136,42 @@ namespace TestProject
             debugger.Flush();
 
             var parseTime = System.Diagnostics.Stopwatch.StartNew();
-            IEnumerable<Token> inputSource;
 #if DEBUG
             // (24 / 12) + 2 * (3-4)
-            inputSource = new Token[]
+            var inputSource = new[]
                 {
-                    new Token(7, "("),
-                    new Token(6, int.MaxValue),
-                    new Token(4, "*"),
-                    new Token(6, int.MaxValue),
-                    new Token(8, ")"),
-                    new Token(2, "+"),
                     new Token(6, 2),
-                    new Token(4, "*"),
+                    new Token(2, "+"),
                     new Token(7, "("),
-                    new Token(6, 3),
-                    new Token(3, "-"),
-                    new Token(6, 4),
+                    new Token(6, 0),
+                    new Token(4, "*"),
+                    new Token(6, int.MaxValue),
                     new Token(8, ")")
                 };
 #else
-            inputSource = TestLarge();
+            var inputSource = TestLarge();
 #endif
-            var result = await parser.ParseInputAsync(new AsyncLATokenIterator(new AsyncEnumerableWrapper(inputSource)), debugger);
+            Token result;
+            using (var tokenIterator = new AsyncLATokenIterator(new AsyncEnumerableWrapper(inputSource)))
+            {
+                result = await parser.ParseInputAsync(tokenIterator, debugger, allowRewriting: true);
+            }
             parseTime.Stop();
-            debugger.WriteFinalToken(string.Format("Accept ({0} ms): ", parseTime.Elapsed.TotalMilliseconds), "Error while parsing: ", result);
-        }
-
-        private static Func<Token[], object> NewMethod()
-        {
-            return x => x[1].ID == 6 ? x[1] : null;
+            var timeElapsed = string.Format("{0} ms", parseTime.Elapsed.TotalMilliseconds);
+            debugger.WriteFinalToken(
+                string.Format("Accept ({0}): ", timeElapsed),
+                string.Format("Error while parsing ({0}): ", timeElapsed),
+                              result);
         }
 
         private static IEnumerable<Token> TestLarge()
         {
-            yield return new Token(6, 0);
-
-            for (var i = 0; i < int.MaxValue >> 8; i++)
+            for (var i = 1; i < 50000; i++)
             {
+                yield return new Token(6, 1);
                 yield return new Token(4, "*");
-                yield return new Token(6, i);
             }
+            yield return new Token(6, 1);
         }
     }
 }

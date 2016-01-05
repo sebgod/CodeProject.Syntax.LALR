@@ -4,26 +4,86 @@ using System.Linq;
 
 namespace CodeProject.Syntax.LALR
 {
+    public enum ContentType : byte
+    {
+        Empty,
+        Reduction,
+        Nested,
+        Leaf
+    }
+
     public class Token : IEquatable<Token>
     {
         public static readonly Token EOF = new Token(-1, "$");
 
         private readonly int _id;
+        private readonly object _content;
+        private readonly ContentType _contentType;
 
-        public int ID
-        {
-            get { return _id; }
-        }
+        public int ID { get { return _id; } }
 
-        public object Content { get; set; }
+        public object Content { get { return _content; } }
+
+        public Reduction Reduction { get { return (Reduction) _content; } }
+
+        public Token Nested { get { return (Token) _content; } }
 
         public int State { get; set; }
+
+        public ContentType ContentType { get { return _contentType; } }
 
         public Token(int id, object content)
         {
             _id = id;
-            Content = content;
-            State = -1;
+            _content = content;
+            _contentType = DetermineContentType(_content);
+
+            State = ContentType == ContentType.Reduction && Reduction.Children.Any(p => p.IsError) ? -1 : id;
+        }
+
+        public static ContentType DetermineContentType(object content)
+        {
+            if (content == null)
+            {
+                return ContentType.Empty;
+            }
+            if (content is Token)
+            {
+                return ContentType.Nested;
+            }
+            if (content is Reduction)
+            {
+                return ContentType.Reduction;
+            }
+            return ContentType.Leaf;
+        }
+
+        public bool IsError
+        {
+            get
+            {
+                if (State < 0)
+                {
+                    return true;
+                }
+
+                var isError = false;
+                switch (_contentType)
+                {
+                    case ContentType.Nested:
+                        isError = ((Token) _content).IsError;
+                        break;
+
+                    case ContentType.Reduction:
+                        isError = Reduction.Children.Any(p => p.IsError);
+                        break;
+                }
+                if (isError)
+                {
+                    State = -1;
+                }
+                return isError;
+            }
         }
 
         public bool Equals(Token other)

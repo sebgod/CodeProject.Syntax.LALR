@@ -37,7 +37,7 @@ namespace CodeProject.Syntax.LALR
 
         public void WriteFinalToken(string acceptMsg, string failMsg, Token token)
         {
-            if (token.State < 0 && _errorWriter != null)
+            if (token.IsError && _errorWriter != null)
             {
                 _errorWriter(failMsg + TokenInfo(token) + Environment.NewLine);
             }
@@ -402,26 +402,27 @@ namespace CodeProject.Syntax.LALR
             var name = GetTokenName(token.ID);
             if (_parser.NonTerminals.Contains(token.ID))
             {
-                var reduction = token.Content as Reduction;
-                if (reduction != null)
+                switch (token.ContentType)
                 {
-                    var production = _parser.Productions[reduction.Production];
-                    info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
-                    for (var i = 0; i < reduction.Children.Count; i++)
-                    {
-                        if (i > 0)
+                    case ContentType.Reduction:
+                        var reduction = token.Reduction;
+                        var production = _parser.Productions[reduction.Production];
+                        info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
+                        for (var i = 0; i < reduction.Children.Count; i++)
                         {
-                            info.Append(' ');
+                            if (i > 0)
+                            {
+                                info.Append(' ');
+                            }
+                            TokenInfo(reduction.Children[i], info);
                         }
-                        TokenInfo(reduction.Children[i], info);
-                    }
-                    info.Append(']');
-                }
-                else
-                {
-                    info.AppendFormat("{0}->[", name);
-                    TokenInfo((Token)token.Content, info);
-                    info.Append(']');
+                        info.Append(']');
+                        break;
+                    case ContentType.Nested:
+                        info.AppendFormat("{0}->[", name);
+                        TokenInfo(token.Nested, info);
+                        info.Append(']');
+                        break;
                 }
             }
             else

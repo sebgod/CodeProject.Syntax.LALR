@@ -644,72 +644,74 @@ namespace CodeProject.Syntax.LALR
         /// <summary>
         /// Based on: http://www.goldparser.org/doc/engine-pseudo/parse-token.htm
         /// </summary>
-        /// <param name="tokenIterator">Token iterator which will be owned by the callee</param>
+        /// <param name="tokenIterator">Token iterator which will be owned by the caller</param>
         /// <param name="debugger">Enables debugging support</param>
         /// <param name="trimReductions">If true (default), trim reductions of the form L -> R, where R is a non-terminal</param>
+        /// <param name="allowRewriting">Apply rewriting functions</param>
         /// <returns>The reduced program tree on acceptance or the erroneous token</returns>
-        public async Task<Token> ParseInputAsync(IAsyncLAIterator<Token> tokenIterator, Debug debugger, bool trimReductions = true)
+        public async Task<Token> ParseInputAsync(IAsyncLAIterator<Token> tokenIterator, Debug debugger,
+            bool trimReductions = true,
+            bool allowRewriting = true)
         {
             const int initState = 0;
             var tokenStack = new Stack<Token>();
             var state = initState;
 
-            using (tokenIterator)
+            while (true)
             {
-                while (true)
+                var token = await tokenIterator.LookAheadAsync();
+                var action = ParseTable.Actions[state, token.ID + 1];
+                debugger.DumpParsingState(state, tokenStack, token, action);
+
+                switch (action.ActionType)
                 {
-                    var token = await tokenIterator.LookAheadAsync();
-                    var action = ParseTable.Actions[state, token.ID + 1];
-                    debugger.DumpParsingState(state, tokenStack, token, action);
+                    case ActionType.Shift:
+                        state = action.ActionParameter;
+                        token.State = state;
+                        tokenStack.Push(token);
+                        await tokenIterator.MoveNextAsync();
+                        break;
 
-                    switch (action.ActionType)
-                    {
-                        case ActionType.Shift:
-                            state = action.ActionParameter;
-                            token.State = state;
-                            tokenStack.Push(token);
-                            await tokenIterator.MoveNextAsync();
-                            break;
-
-                        case ActionType.Reduce:
-                            var nProduction = action.ActionParameter;
-                            var production = Productions[nProduction];
-                            var nChildren = production.Right.Length;
-                            Token reduction;
-                            if (trimReductions && nChildren == 1 && _nonterminals.Contains(production.Right[0]))
+                    case ActionType.Reduce:
+                        var nProduction = action.ActionParameter;
+                        var production = Productions[nProduction];
+                        var nChildren = production.Right.Length;
+                        Token reduction;
+                        if (trimReductions && nChildren == 1 && _nonterminals.Contains(production.Right[0]))
+                        {
+                            reduction = new Token(production.Left, tokenStack.Pop().Content);
+                        }
+                        else
+                        {
+                            var children = new Token[nChildren];
+                            for (var i = 0; i < nChildren; i++)
                             {
-                                reduction = new Token(production.Left, tokenStack.Pop().Content);
+                                children[nChildren - i - 1] = tokenStack.Pop();
                             }
-                            else
-                            {
-                                var children = new Token[nChildren];
-                                for (var i = 0; i < nChildren; i++)
-                                {
-                                    children[nChildren - i - 1] = tokenStack.Pop();
-                                }
-                                reduction = new Token(production.Left, production.Rewrite(children));
-                            }
-                            var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
-                            state = ParseTable.Actions[lastState, production.Left + 1].ActionParameter;
-                            reduction.State = production.Left;
-                            tokenStack.Push(reduction);
-                            if (tokenStack.Count == 1 && tokenStack.Peek().ID == 0)
-                            {
-                                return tokenStack.Pop();
-                            }
-                            break;
+                            var rewrite = (allowRewriting ? production.Rewrite(children) : null) ??
+                                          new Reduction(nProduction, children);
+                            reduction = new Token(production.Left, rewrite);
+                        }
+                        var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
+                        state = ParseTable.Actions[lastState, production.Left + 1].ActionParameter;
+                        reduction.State = production.Left;
+                        tokenStack.Push(reduction);
+                        if (tokenStack.Count == 1 && tokenStack.Peek().ID == 0)
+                        {
+                            return tokenStack.Pop();
+                        }
+                        break;
 
-                        case ActionType.Error:
-                            return token;
+                    case ActionType.Error:
+                        return token;
 
-                        case ActionType.ErrorRR:
-                            throw new InvalidOperationException("Reduce-Reduce conflict in grammar: " + token);
+                    case ActionType.ErrorRR:
+                        throw new InvalidOperationException("Reduce-Reduce conflict in grammar: " + token);
 
-                        case ActionType.ErrorSR:
-                            throw new InvalidOperationException("Shift-Reduce conflict in grammar: " + token);
-                    }
-                    debugger.Flush();
+                    case ActionType.ErrorSR:
+                        throw new InvalidOperationException("Shift-Reduce conflict in grammar: " + token);
                 }
+                debugger.Flush();
             }
         }
 

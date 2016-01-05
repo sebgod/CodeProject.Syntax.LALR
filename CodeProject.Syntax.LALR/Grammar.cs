@@ -22,8 +22,15 @@ namespace CodeProject.Syntax.LALR
         private readonly int[] _right;
         private readonly Func<int, Token[], object> _rewriter;
 
-        public int Left { get { return _left; } }
-        public int[] Right { get { return _right; } }
+        public int Left
+        {
+            get { return _left; }
+        }
+
+        public int[] Right
+        {
+            get { return _right; }
+        }
 
         public Production(int left, params int[] right)
             : this(left, null, right)
@@ -35,19 +42,36 @@ namespace CodeProject.Syntax.LALR
         {
             _left = left;
             _right = right;
-            _rewriter = rewriter ?? DefaultReduction;
+            _rewriter = rewriter;
         }
 
         public object Rewrite(Token[] children)
         {
-            return _rewriter(Left, children) ?? DefaultReduction(Left, children);
+            return _rewriter != null ? _rewriter(Left, children) : null;;
         }
+    }
 
-        private static Reduction DefaultReduction(int production, Token[] children)
+    /// <summary>
+    /// A reduced production with all leaf tokens and a reference to the reduced production
+    /// </summary>
+    public class Reduction
+    {
+        private readonly int _production;
+        private readonly Token[] _children;
+
+        /// <summary>
+        /// Reference to the reduced production in the production table
+        /// </summary>
+        public int Production { get { return _production; } }
+
+        public IList<Token> Children { get { return _children; } }
+
+        public Reduction(int production, params Token[] children)
         {
-            return new Reduction(production, children);
+            _production = production;
+            _children = children;
         }
-    };
+    }
 
     /// <summary>
     /// A collection of productions at a particular precedence
