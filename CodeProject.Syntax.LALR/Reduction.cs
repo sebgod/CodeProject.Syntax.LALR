@@ -11,7 +11,7 @@ namespace CodeProject.Syntax.LALR
 
         public IList<Token> Children { get { return _children; } }
 
-        public Reduction(int production, Token[] children)
+        public Reduction(int production, params Token[] children)
         {
             _production = production;
             _children = children;

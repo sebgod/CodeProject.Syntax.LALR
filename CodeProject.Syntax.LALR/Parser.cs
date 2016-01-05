@@ -603,7 +603,7 @@ namespace CodeProject.Syntax.LALR
                         {
                             _parseTable.Actions[nStateID, nToken + 1] = reduceActions[0];
                         }
-                        else if (derivation == Derivation.RightMost && shiftAction != null)
+                        else if (derivation == Derivation.RightMost && !shiftAction.HasValue)
                         {
                             _parseTable.Actions[nStateID, nToken + 1] = shiftAction.Value;
                         }
@@ -687,7 +687,7 @@ namespace CodeProject.Syntax.LALR
                                 {
                                     children[nChildren - i - 1] = tokenStack.Pop();
                                 }
-                                reduction = new Token(production.Left, new Reduction(nProduction, children));
+                                reduction = new Token(production.Left, production.Rewrite(children));
                             }
                             var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
                             state = ParseTable.Actions[lastState, production.Left + 1].ActionParameter;

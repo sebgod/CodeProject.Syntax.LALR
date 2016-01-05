@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace CodeProject.Syntax.LALR
@@ -15,18 +16,36 @@ namespace CodeProject.Syntax.LALR
     /// <summary>
     /// A grammatical production
     /// </summary>
-    public struct Production
+    public class Production
     {
         private readonly int _left;
         private readonly int[] _right;
+        private readonly Func<int, Token[], object> _rewriter;
 
         public int Left { get { return _left; } }
         public int[] Right { get { return _right; } }
 
         public Production(int left, params int[] right)
+            : this(left, null, right)
+        {
+            // calls Production(int left, Func<Token[], object> rewriter, params int[] right)
+        }
+
+        public Production(int left, Func<int, Token[], object> rewriter, params int[] right)
         {
             _left = left;
             _right = right;
+            _rewriter = rewriter ?? DefaultReduction;
+        }
+
+        public object Rewrite(Token[] children)
+        {
+            return _rewriter(Left, children) ?? DefaultReduction(Left, children);
+        }
+
+        private static Reduction DefaultReduction(int production, Token[] children)
+        {
+            return new Reduction(production, children);
         }
     };
 

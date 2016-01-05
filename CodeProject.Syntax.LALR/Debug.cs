@@ -35,11 +35,15 @@ namespace CodeProject.Syntax.LALR
             _builder.Clear();
         }
 
-        public void WriteErrorToken(string message, Token token)
+        public void WriteFinalToken(string acceptMsg, string failMsg, Token token)
         {
-            if (_errorWriter != null)
+            if (token.State < 0 && _errorWriter != null)
             {
-                _errorWriter(message + token + Environment.NewLine);
+                _errorWriter(failMsg + TokenInfo(token) + Environment.NewLine);
+            }
+            else if (token.State == 0 && _infoWriter != null)
+            {
+                _infoWriter(acceptMsg + TokenInfo(token) + Environment.NewLine);
             }
         }
 
@@ -389,21 +393,36 @@ namespace CodeProject.Syntax.LALR
 
         private void TokenInfo(Token token, StringBuilder info)
         {
+            if (info.Length > 70)
+            {
+                info.Append("...");
+                return;
+            }
+
             var name = GetTokenName(token.ID);
             if (_parser.NonTerminals.Contains(token.ID))
             {
-                var reduction = (Reduction) token.Content;
-                var production = _parser.Productions[reduction.Production];
-                info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
-                for (var i = 0; i < reduction.Children.Count; i++)
+                var reduction = token.Content as Reduction;
+                if (reduction != null)
                 {
-                    if (i > 0)
+                    var production = _parser.Productions[reduction.Production];
+                    info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
+                    for (var i = 0; i < reduction.Children.Count; i++)
                     {
-                        info.Append(' ');
+                        if (i > 0)
+                        {
+                            info.Append(' ');
+                        }
+                        TokenInfo(reduction.Children[i], info);
                     }
-                    TokenInfo(reduction.Children[i], info);
+                    info.Append(']');
                 }
-                info.Append(']');
+                else
+                {
+                    info.AppendFormat("{0}->[", name);
+                    TokenInfo((Token)token.Content, info);
+                    info.Append(']');
+                }
             }
             else
             {
