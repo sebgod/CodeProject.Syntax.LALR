@@ -5,11 +5,11 @@ using System.Runtime.CompilerServices;
 // Change them to the values specific to your project.
 
 [assembly: AssemblyTitle("CodeProject.Syntax.LALR")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("LALR Parse Table Generation in C#")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("")]
-[assembly: AssemblyCopyright("")]
+[assembly: AssemblyCopyright("©2011 Phillip Voyle")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -18,6 +18,7 @@ using System.Runtime.CompilerServices;
 // and "{Major}.{Minor}.{Build}.*" will update just the revision.
 
 [assembly: AssemblyVersion("1.0.*")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
 
 // The following attributes are used to specify the signing key for the assembly,
 // if desired. See the Mono documentation for more information about signing.

@@ -65,7 +65,11 @@ namespace CodeProject.Syntax.LALR
             if (char.IsHighSurrogate(unit))
             {
                 // RefillBuffer guarantees that a high surrogate will never be the last code unit
-                var low = _chars[++_index + lookAhead];
+                var low = _chars[_index + 1 + lookAhead];
+                if (lookAhead == 0)
+                {
+                    _index++;
+                }
                 return char.IsLowSurrogate(low) ? char.ConvertToUtf32(unit, low) : ReplacementCodepoint;
             }
             return char.IsLowSurrogate(unit) ? ReplacementCodepoint : unit;
@@ -89,10 +93,21 @@ namespace CodeProject.Syntax.LALR
 
             if (read > 0)
             {
-                // TODO count lines + offs
-                _chars.Append(readBuffer, 0, read);
+                var inBuffer = read;
+                for (var i = 0; i < inBuffer; i++)
+                {
+                    var c = readBuffer[i];
+                    if (c != '\r')
+                    {
+                        _chars.Append(c);
+                    }
+                    else
+                    {
+                        read--;
+                    }
+                }
 
-                if (char.IsHighSurrogate(_chars[read - 1]))
+                if (read > 0 && char.IsHighSurrogate(_chars[read - 1]))
                 {
                     var readLow = await _reader.ReadAsync(readBuffer, 0, 1);
                     if (readLow > 0)

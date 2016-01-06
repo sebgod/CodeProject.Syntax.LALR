@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeProject.Syntax.LALR", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject", "TestProject\TestProject.csproj", "{4D9C7794-F2DF-4C55-97A3-BB37425E999D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeProject.Syntax.LALR.Tests", "CodeProject.Syntax.LALR.Tests\CodeProject.Syntax.LALR.Tests.csproj", "{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,14 @@ Global
 		{4D9C7794-F2DF-4C55-97A3-BB37425E999D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4D9C7794-F2DF-4C55-97A3-BB37425E999D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4D9C7794-F2DF-4C55-97A3-BB37425E999D}.Release|x86.ActiveCfg = Release|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Debug|x86.Build.0 = Debug|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|x86.ActiveCfg = Release|Any CPU
+		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
