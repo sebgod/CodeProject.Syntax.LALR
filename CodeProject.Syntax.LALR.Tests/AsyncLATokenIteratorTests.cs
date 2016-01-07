@@ -49,7 +49,7 @@ namespace CodeProject.Syntax.LALR.Tests
             }
         }
 
-        private object[] TokenSource = new object[]
+        private readonly object[] TokenSource = new object[]
         {
             new TestCaseData(new PrintableList<Token>
             {
