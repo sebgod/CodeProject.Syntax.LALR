@@ -120,17 +120,6 @@ namespace TestProject
             var parser = new Parser(grammar);
             var debugger = new Debug(parser, Console.Write, Console.Error.Write);
 
-            const string inputString = "𝒜\r\n𝓑";// "(1/5)+2*(3-4)\r\n";
-            using (var charReader = new AsyncLACharIterator(new StringReader(inputString)))
-            {
-                while (charReader.MoveNextAsync().Result)
-                {
-                    var current = DisplayUTF8(await charReader.CurrentAsync());
-                    var la = DisplayUTF8(await charReader.LookAheadAsync());
-                    Console.WriteLine("current={0,-2} la={1,-3}", current, la);
-                }
-            }
-
             debugger.DumpParseTable();
             debugger.Flush();
 
@@ -161,28 +150,6 @@ namespace TestProject
                 string.Format("Accept ({0}): ", timeElapsed),
                 string.Format("Error while parsing ({0}): ", timeElapsed),
                               result);
-        }
-
-        private static string DisplayUTF8(int utf8)
-        {
-            switch (utf8)
-            {
-                case '\t':
-                    return @"\t";
-                case '\r':
-                    return @"\r";
-                case '\n':
-                    return @"\n";
-                case -1:
-                    return @"EOF";
-                case AsyncLACharIterator.ReplacementCodepoint:
-                    return @"???";
-                default:
-                    var asString = char.ConvertFromUtf32(utf8);
-                    return asString.Length == 2
-                               ? string.Format(@"\u{0,-4:x}\u{1,-4:x}", (int) asString[0], (int) asString[1])
-                               : asString;
-            }
         }
 
         private static IEnumerable<Token> TestLarge()

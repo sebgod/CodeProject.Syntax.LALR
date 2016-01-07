@@ -68,6 +68,9 @@
   </Choose>
   <ItemGroup>
     <Compile Include="AsyncLACharIteratorTests.cs" />
+    <Compile Include="AsyncLATokenIteratorTests.cs" />
+    <Compile Include="GrammarTests.cs" />
+    <Compile Include="PrintableList.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
