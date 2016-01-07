@@ -45,23 +45,17 @@ namespace CodeProject.Syntax.LALR
             {
                 throw new InvalidOperationException("Did not call MoveNextAsync() yet!");
             }
-            if (_index + lookAhead >= _chars.Length && await RefillBuffer() <= 0)
-            {
-                return EOF;
-            }
 
-            char unit;
-            while ((unit = _chars[_index + lookAhead]) == '\r')
+            if (_index + lookAhead >= _chars.Length)
             {
-                if (_index + lookAhead + 1 < _chars.Length)
-                {
-                    _index++;
-                }
-                else if (await RefillBuffer() <= 0)
+                if (await RefillBuffer() <= 0)
                 {
                     return EOF;
                 }
             }
+
+            var unit = _chars[_index + lookAhead];
+
             if (char.IsHighSurrogate(unit))
             {
                 // RefillBuffer guarantees that a high surrogate will never be the last code unit
@@ -86,9 +80,11 @@ namespace CodeProject.Syntax.LALR
 
         private async Task<int> RefillBuffer()
         {
-            _index = 0;
-            _chars.Clear();
-            var readBuffer = new char[_chars.Capacity >> 1];
+            if (_index < 0)
+            {
+                _index = 0;
+            }
+            var readBuffer = new char[Math.Max(2, _chars.Capacity)];
             var read = await _reader.ReadAsync(readBuffer, 0, readBuffer.Length);
 
             if (read > 0)

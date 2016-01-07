@@ -8,8 +8,8 @@ using System.Runtime.CompilerServices;
 [assembly: AssemblyDescription("LALR Parse Table Generation in C#")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("")]
-[assembly: AssemblyCopyright("©2011 Phillip Voyle")]
+[assembly: AssemblyProduct("CodeProject.Syntax.LALR")]
+[assembly: AssemblyCopyright("Copyright ©2011 Phillip Voyle")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
