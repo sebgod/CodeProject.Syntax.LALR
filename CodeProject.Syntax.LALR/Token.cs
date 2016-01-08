@@ -12,6 +12,43 @@ namespace CodeProject.Syntax.LALR
         Leaf
     }
 
+    public struct TokenCategory : IEquatable<TokenCategory>
+    {
+        private readonly int _id;
+
+        private readonly string _name;
+
+        public int ID { get { return _id; } }
+
+        public string Name { get { return _name; } }
+
+        public TokenCategory(int id, string name)
+        {
+            _id = id;
+            _name = name;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is TokenCategory && Equals((TokenCategory)obj);
+        }
+
+        public override int GetHashCode()
+        {
+            return _id;
+        }
+
+        public override string ToString()
+        {
+            return string.Format("{0}: {1}", ID, Name);
+        }
+
+        public bool Equals(TokenCategory other)
+        {
+            return _id == other.ID;
+        }
+    }
+
     public class Token : IEquatable<Token>
     {
         public static readonly Token EOF = new Token(-1, "$");

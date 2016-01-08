@@ -271,11 +271,11 @@ namespace CodeProject.Syntax.LALR
                 open.RemoveAt(0);
                 while (_lrGotos.Count <= nState)
                 {
-                    _lrGotos.Add(new int[_grammar.Tokens.Length]);
-                    _gotoPrecedence.Add(new int[_grammar.Tokens.Length]);
+                    _lrGotos.Add(new int[_grammar.TokenCategories.Length]);
+                    _gotoPrecedence.Add(new int[_grammar.TokenCategories.Length]);
                 }
 
-                for (int nToken = 0; nToken < _grammar.Tokens.Length; nToken++)
+                for (int nToken = 0; nToken < _grammar.TokenCategories.Length; nToken++)
                 {
                     bool bAdded = false;
                     int nPrecedence = Int32.MinValue;
@@ -480,7 +480,7 @@ namespace CodeProject.Syntax.LALR
         /// </summary>
         void InitSymbols()
         {
-            for (int nSymbol = 0; nSymbol < _grammar.Tokens.Length; nSymbol++)
+            for (int nSymbol = 0; nSymbol < _grammar.TokenCategories.Length; nSymbol++)
             {
                 var isTerminal = _productions.All(production => production.Left != nSymbol);
 
@@ -529,7 +529,7 @@ namespace CodeProject.Syntax.LALR
             {
                 var lalrState = _lalrStates[nStateID];
 
-                for (int nToken = -1; nToken < _grammar.Tokens.Length; nToken++)
+                for (int nToken = -1; nToken < _grammar.TokenCategories.Length; nToken++)
                 {
                     var actions = new List<Action>();
                     if (nToken >= 0 && _lrGotos[nStateID][nToken] >= 0)
@@ -735,7 +735,7 @@ namespace CodeProject.Syntax.LALR
             _productions = new List<Production>();
             _productionDerivation = new List<Derivation>();
             _productionPrecedence = new List<int>();
-            var nTokens = _grammar.Tokens.Length;
+            var nTokens = _grammar.TokenCategories.Length;
             _firstSets = new HashSet<int>[nTokens];
 
             PopulateProductions();
