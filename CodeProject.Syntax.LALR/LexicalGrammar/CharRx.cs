@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
-    public struct CharRx : IEquatable<CharRx>, ISingleCharRx
+    public struct CharRx : IEquatable<CharRx>, ISingleCharRx, IComparable<CharRx>
     {
         private readonly int _codepoint;
 
@@ -27,6 +27,11 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             return _codepoint == other._codepoint;
         }
 
+        public int CompareTo(CharRx other)
+        {
+            return _codepoint < other._codepoint ? -1 : _codepoint > other._codepoint ? 1 : 0;
+        }
+
         public override bool Equals(object obj)
         {
             return obj is CharRx && Equals((CharRx) obj);
@@ -35,6 +40,26 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         public override int GetHashCode()
         {
             return _codepoint;
+        }
+
+        public static bool operator ==(CharRx a, CharRx b)
+        {
+            return a.Equals(b);
+        }
+
+        public static bool operator !=(CharRx a, CharRx b)
+        {
+            return !(a == b);
+        }
+
+        public static bool operator <(CharRx a, CharRx b)
+        {
+            return a.CompareTo(b) < 0;
+        }
+
+        public static bool operator >(CharRx a, CharRx b)
+        {
+            return a.CompareTo(b) > 0;
         }
 
         public override string ToString()

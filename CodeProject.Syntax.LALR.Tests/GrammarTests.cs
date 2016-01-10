@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CodeProject.Syntax.LALR.Tests
 {
-    class GrammarTests
+    public class GrammarTests
     {
     }
 }

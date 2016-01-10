@@ -24,6 +24,47 @@ namespace CodeProject.Syntax.LALR.Tests
             return new CharSequenceRx(chars).Pattern;
         }
 
+        [TestCase('a', 'b', Result = false)]
+        [TestCase('a', 'a', Result = true)]
+        [TestCase('b', 'a', Result = false)]
+        public bool TestCharRxEquality(int a, int b)
+        {
+            return new CharRx(a) == b;
+        }
+
+        [TestCase('a', 'b', Result = true)]
+        [TestCase('a', 'a', Result = false)]
+        [TestCase('b', 'a', Result = true)]
+        public bool TestCharRxInEquality(int a, int b)
+        {
+            return new CharRx(a) != b;
+        }
+
+        [TestCase('a', 'b', Result = "a-b")]
+        [TestCase('a', 'a', Result = "a")]
+        [TestCase('b', 'a', ExpectedException = typeof(ArgumentException))]
+        public string TestCharRangeRx(int a, int b)
+        {
+            return new CharRangeRx(a, b).Pattern;
+        }
+
+        [TestCase(-1, -1, ExpectedException = typeof(ArgumentException))]
+        [TestCase(-1, -1, ExpectedException = typeof(ArgumentException))]
+        [TestCase(-1, -2, ExpectedException = typeof(ArgumentException))]
+        [TestCase(+3, -2, ExpectedException = typeof(ArgumentException))]
+        [TestCase(+0, -1, Result = "*")]
+        [TestCase(+0, +1, Result = "?")]
+        [TestCase(+1, -1, Result = "+")]
+        [TestCase(+1, +1, Result = "")]
+        [TestCase(+1, +2, Result = "{1,2}")]
+        [TestCase(+2, -1, Result = "{2,}")]
+        [TestCase(+2, +4, Result = "{2,4}")]
+        [TestCase(+3, +3, Result = "{3}")]
+        public string TestMultiplicity(int from, int to)
+        {
+            return new Multiplicity(from, to).Pattern;
+        }
+
         [TestCaseSource("_charClassSource")]
         public string TestCharClassRxFromCharsIList(bool positive, IList<ISingleCharRx> chars)
         {
@@ -41,7 +82,9 @@ namespace CodeProject.Syntax.LALR.Tests
                 new TestCaseData(false, MakeRxArray(new CharClassRx('\\', 's')))
                     .Throws(typeof (ArgumentException)),
                 new TestCaseData(true, MakeRxArray(new CharClassRx(false, 'a'), new CharClassRx('b')))
-                    .Throws(typeof (ArgumentException))
+                    .Throws(typeof (ArgumentException)),
+                new TestCaseData(true, MakeRxArray(new CharRangeRx('A', 'Z'), new CharRangeRx('a', 'z')))
+                    .Returns("[A-Za-z]")
             };
 
         private static object MakeRxArray(params ISingleCharRx[] charExprs)
