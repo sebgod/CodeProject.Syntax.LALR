@@ -12,6 +12,8 @@
 
     public interface IClassRx : ISingleCharRx
     {
+        bool Positive { get; }
+
         string PatternWithoutBrackets { get; }
     }
 }

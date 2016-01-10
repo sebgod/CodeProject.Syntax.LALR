@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using CodeProject.Syntax.LALR.LexicalGrammar;
 
 namespace CodeProject.Syntax.LALR.Tests
 {
@@ -13,6 +14,12 @@ namespace CodeProject.Syntax.LALR.Tests
             : base(count)
         {
             // calls base constructor    
+        }
+
+        public PrintableList(IEnumerable<T> collection)
+            : base(collection)
+        {
+            // calls base constructor
         }
 
         public override string ToString()

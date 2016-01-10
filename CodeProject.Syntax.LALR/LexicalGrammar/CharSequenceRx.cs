@@ -8,7 +8,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         private readonly CharRx[] _chars;
 
         public CharSequenceRx(params int[] chars)
-            : this(chars.Select(p => (CharRx)p).ToArray())
+            : this(chars.Select(p => (CharRx) p).ToArray())
         {
             // calls CharSequenceRx(params CharRx[] chars)
         }
@@ -28,6 +28,9 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             return Pattern;
         }
 
-        public string Pattern { get { return string.Concat(_chars.Select(p => p.ToString())); } }
+        public string Pattern
+        {
+            get { return string.Concat(_chars.Select(p => p.ToString())); }
+        }
     }
 }

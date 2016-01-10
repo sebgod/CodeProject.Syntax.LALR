@@ -1,4 +1,5 @@
-﻿using CodeProject.Syntax.LALR.LexicalGrammar;
+﻿using System;
+using CodeProject.Syntax.LALR.LexicalGrammar;
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,21 +25,28 @@ namespace CodeProject.Syntax.LALR.Tests
         }
 
         [TestCaseSource("_charClassSource")]
-        public string TestCharClassRxFromCharsIList(IList<ISingleCharRx> chars)
+        public string TestCharClassRxFromCharsIList(bool positive, IList<ISingleCharRx> chars)
         {
-            return new CharClassRx(chars.ToArray()).Pattern;
+            return new CharClassRx(positive, chars.ToArray()).Pattern;
         }
 
         private readonly object[] _charClassSource = new object[]
             {
-                new TestCaseData(MakeRxArray('a', 'b', 'c')).Returns(@"[abc]"),
-                new TestCaseData(MakeRxArray('\\', 's')).Returns(@"[\\s]"),
-                new TestCaseData(MakeRxArray(new CharClassRx('\\', 's'))).Returns(@"[\\s]")
+                new TestCaseData(true, MakeRxArray('a', 'b', 'c')).Returns(@"[abc]"),
+                new TestCaseData(true, MakeRxArray('\\', 's')).Returns(@"[\\s]"),
+                new TestCaseData(true, MakeRxArray(new CharClassRx('\\', 's'))).Returns(@"[\\s]"),
+                new TestCaseData(true, MakeRxArray(new CharClassRx(false, '\\', 's')))
+                    .Throws(typeof (ArgumentException)),
+                new TestCaseData(false, MakeRxArray(new CharClassRx(false, '\\', 's'))).Returns(@"[^\\s]"),
+                new TestCaseData(false, MakeRxArray(new CharClassRx('\\', 's')))
+                    .Throws(typeof (ArgumentException)),
+                new TestCaseData(true, MakeRxArray(new CharClassRx(false, 'a'), new CharClassRx('b')))
+                    .Throws(typeof (ArgumentException))
             };
 
         private static object MakeRxArray(params ISingleCharRx[] charExprs)
         {
-            return charExprs;
+            return new PrintableList<ISingleCharRx>(charExprs);
         }
 
         private static object MakeRxArray(params int[] chars)
