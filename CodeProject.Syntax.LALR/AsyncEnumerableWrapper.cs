@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using CodeProject.Syntax.LALR.LexicalGrammar;
 
 namespace CodeProject.Syntax.LALR
 {

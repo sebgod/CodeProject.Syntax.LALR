@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using CodeProject.Syntax.LALR.LexicalGrammar;
+using CodeProject.Syntax.LALR.Utilities;
 
 namespace TestProject
 {

@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace CodeProject.Syntax.LALR
+namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
     public class AsyncLATokenIterator : IAsyncLAIterator<Token>
     {

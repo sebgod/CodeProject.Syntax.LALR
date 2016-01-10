@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Linq;
 
-namespace CodeProject.Syntax.LALR
+namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
     public enum ContentType : byte
     {

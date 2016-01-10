@@ -36,17 +36,21 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="AsyncEnumerableWrapper.cs" />
-    <Compile Include="BoxDrawing.cs" />
+    <Compile Include="LexicalGrammar\CharClassRx.cs" />
+    <Compile Include="LexicalGrammar\CharSequenceRx.cs" />
+    <Compile Include="LexicalGrammar\ISingleCharRx.cs" />
+    <Compile Include="Utilities\BoxDrawing.cs" />
     <Compile Include="Debug.cs" />
     <Compile Include="Grammar.cs" />
     <Compile Include="IAsyncIterator.cs" />
     <Compile Include="IAsyncLAIterator.cs" />
-    <Compile Include="AsyncLACharIterator.cs" />
-    <Compile Include="AsyncLATokenIterator.cs" />
+    <Compile Include="LexicalGrammar\AsyncLACharIterator.cs" />
+    <Compile Include="LexicalGrammar\AsyncLATokenIterator.cs" />
+    <Compile Include="LexicalGrammar\CharRx.cs" />
     <Compile Include="LRItems.cs" />
     <Compile Include="Parser.cs" />
     <Compile Include="ParseTable.cs" />
-    <Compile Include="Token.cs" />
+    <Compile Include="LexicalGrammar\Token.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
 </Project>

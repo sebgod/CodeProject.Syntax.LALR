@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿using CodeProject.Syntax.LALR.LexicalGrammar;
+using NUnit.Framework;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -6,7 +7,7 @@ namespace CodeProject.Syntax.LALR.Tests
 {
     public class AsyncLATokenIteratorTests
     {
-        [Test, TestCaseSource("TokenSource")]
+        [Test, TestCaseSource("_tokenSource")]
         public async Task TestTokenIteration(IList<Token> expectedTokens)
         {
             using (var tokenIterator = new AsyncLATokenIterator(new AsyncEnumerableWrapper(expectedTokens)))
@@ -26,7 +27,7 @@ namespace CodeProject.Syntax.LALR.Tests
             }
         }
 
-        [TestCaseSource("TokenSource")]
+        [TestCaseSource("_tokenSource")]
         [Test(Description = "Test optional iterator resetting functionality")]
         public async Task TestSupportResetting(IList<Token> expectedTokens)
         {
@@ -44,12 +45,12 @@ namespace CodeProject.Syntax.LALR.Tests
                 }
                 else
                 {
-                    Assert.That(() => tokenIterator.Reset(), Throws.InvalidOperationException);
+                    Assert.That(tokenIterator.Reset, Throws.InvalidOperationException);
                 }
             }
         }
 
-        private readonly object[] TokenSource = new object[]
+        private readonly object[] _tokenSource = new object[]
         {
             new TestCaseData(new PrintableList<Token>
             {
@@ -63,6 +64,5 @@ namespace CodeProject.Syntax.LALR.Tests
             }),
             new TestCaseData(new PrintableList<Token>())
         };
-
     }
 }

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CodeProject.Syntax.LALR.LexicalGrammar;
+using CodeProject.Syntax.LALR.Utilities;
 
 namespace CodeProject.Syntax.LALR
 {

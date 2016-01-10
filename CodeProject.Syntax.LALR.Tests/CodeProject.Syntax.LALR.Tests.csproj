@@ -72,6 +72,8 @@
     <Compile Include="GrammarTests.cs" />
     <Compile Include="PrintableList.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RxTests.cs" />
+    <Compile Include="TestHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj">

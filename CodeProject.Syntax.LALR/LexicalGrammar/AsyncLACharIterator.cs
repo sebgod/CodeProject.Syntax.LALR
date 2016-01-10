@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CodeProject.Syntax.LALR
+namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
     public class AsyncLACharIterator : IAsyncLAIterator<int>
     {

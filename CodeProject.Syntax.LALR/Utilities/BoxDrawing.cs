@@ -1,7 +1,7 @@
 using System;
 using System.Text;
 
-namespace CodeProject.Syntax.LALR
+namespace CodeProject.Syntax.LALR.Utilities
 {
     static class BoxDrawing
     {
