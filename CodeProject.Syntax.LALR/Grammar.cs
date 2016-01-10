@@ -1,6 +1,7 @@
+using CodeProject.Syntax.LALR.LexicalGrammar;
 using System;
 using System.Collections.Generic;
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using System.Linq;
 
 namespace CodeProject.Syntax.LALR
 {
@@ -97,16 +98,21 @@ namespace CodeProject.Syntax.LALR
     /// </summary>
     public struct Grammar
     {
-        private readonly string[] _tokens;
+        private readonly TokenCategory[] _tokenCategories;
         private readonly PrecedenceGroup[] _precedenceGroups;
 
-        public string[] Tokens { get { return _tokens; } }
+        public TokenCategory[] TokenCategories { get { return _tokenCategories; } }
 
         public PrecedenceGroup[] PrecedenceGroups { get { return _precedenceGroups; } }
 
-        public Grammar(string[] tokens, params PrecedenceGroup[] precedenceGroups)
+        public Grammar(string[] tokenCategories, params PrecedenceGroup[] precedenceGroups)
+            : this(tokenCategories.Select((pName, pIndex) => new TokenCategory(pIndex, pName)).ToArray(), precedenceGroups)
         {
-            _tokens = tokens;
+            // calls Grammar(TokenCategory[] tokenCategories, params PrecedenceGroup[] precedenceGroups)
+        }
+        public Grammar(TokenCategory[] tokenCategories, params PrecedenceGroup[] precedenceGroups)
+        {
+            _tokenCategories = tokenCategories;
             _precedenceGroups = precedenceGroups;
         }
     };

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using CodeProject.Syntax.LALR;
 using System.Text;
 using System.Threading;
