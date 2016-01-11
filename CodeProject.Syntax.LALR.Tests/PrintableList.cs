@@ -12,7 +12,7 @@ namespace CodeProject.Syntax.LALR.Tests
         public PrintableList(int count)
             : base(count)
         {
-            // calls base constructor    
+            // calls base constructor
         }
 
         public PrintableList(IEnumerable<T> collection)

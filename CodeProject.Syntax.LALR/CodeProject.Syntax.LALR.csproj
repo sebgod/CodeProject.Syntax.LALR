@@ -39,6 +39,7 @@
     <Compile Include="LexicalGrammar\CharClassRx.cs" />
     <Compile Include="LexicalGrammar\CharRangeRx.cs" />
     <Compile Include="LexicalGrammar\CharSequenceRx.cs" />
+    <Compile Include="LexicalGrammar\GroupRx.cs" />
     <Compile Include="LexicalGrammar\ISingleCharRx.cs" />
     <Compile Include="LexicalGrammar\Multiplicity.cs" />
     <Compile Include="Utilities\BoxDrawing.cs" />

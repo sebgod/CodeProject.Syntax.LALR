@@ -31,7 +31,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         public string PatternWithoutBrackets
         {
             get
-            {  
+            {
                 return string.Concat(_chars.Select(ItemToPattern));
             }
         }
@@ -48,6 +48,11 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
                 return subClass.PatternWithoutBrackets;
             }
             return expr.Pattern;
+        }
+
+        public static GroupRx operator *(CharClassRx @this, Multiplicity multiplicity)
+        {
+            return new GroupRx(multiplicity, @this);
         }
 
         public string Pattern

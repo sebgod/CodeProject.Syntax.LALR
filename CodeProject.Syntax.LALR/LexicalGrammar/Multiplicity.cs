@@ -25,7 +25,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             }
             if (to != -1 && to < from)
             {
-                throw new ArgumentException("To must be >= to, if not unbound: " + to, "to");   
+                throw new ArgumentException("To must be >= to, if not unbound: " + to, "to");
             }
 
             _from = from;

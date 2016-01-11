@@ -49,7 +49,7 @@ namespace CodeProject.Syntax.LALR.Tests
         }
 
         [TestCase(-1, -1, ExpectedException = typeof(ArgumentException))]
-        [TestCase(-1, -1, ExpectedException = typeof(ArgumentException))]
+        [TestCase(-1, +0, ExpectedException = typeof(ArgumentException))]
         [TestCase(-1, -2, ExpectedException = typeof(ArgumentException))]
         [TestCase(+3, -2, ExpectedException = typeof(ArgumentException))]
         [TestCase(+0, -1, Result = "*")]

@@ -16,7 +16,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         {
             return new CharRx(codepoint);
         }
-        
+
         public static CharSequenceRx operator +(CharRx a, CharRx b)
         {
             return new CharSequenceRx(a, b);
@@ -60,6 +60,11 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         public static bool operator >(CharRx a, CharRx b)
         {
             return a.CompareTo(b) > 0;
+        }
+
+        public static GroupRx operator *(CharRx @this, Multiplicity multiplicity)
+        {
+            return new GroupRx(multiplicity, @this);
         }
 
         public override string ToString()
