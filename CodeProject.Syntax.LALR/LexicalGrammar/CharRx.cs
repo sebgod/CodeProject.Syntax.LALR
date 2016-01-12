@@ -78,7 +78,28 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             {
                 return _codepoint > char.MaxValue
                       ? string.Format(@"\U{0}", _codepoint.ToString("X8"))
-                      : Regex.Escape(new string((char)_codepoint, 1));
+                      : Regex.Escape(char.ConvertFromUtf32(_codepoint));
+            }
+        }
+
+        public string PatternInsideClass
+        {
+            get
+            {
+                if (_codepoint > char.MaxValue)
+                {
+                    return string.Format(@"\U{0}", _codepoint.ToString("X8"));
+                }
+                else
+                {
+                    switch (_codepoint)
+                    {
+                        case '^': return @"\^";
+                        case '-': return @"\-";
+                        case '\\': return @"\\";
+                        default: return char.ConvertFromUtf32(_codepoint);
+                    }
+                }
             }
         }
     }

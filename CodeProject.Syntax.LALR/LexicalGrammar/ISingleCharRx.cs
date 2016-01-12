@@ -7,13 +7,11 @@
 
     public interface ISingleCharRx : IRx
     {
-        // only a marker interface
+        string PatternInsideClass { get; }
     }
 
     public interface IClassRx : ISingleCharRx
     {
         bool Positive { get; }
-
-        string PatternWithoutBrackets { get; }
     }
 }

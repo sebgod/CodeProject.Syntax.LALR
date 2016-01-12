@@ -45,12 +45,17 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public string Pattern
         {
+            get { throw new InvalidOperationException("Char ranges can only be used inside classes"); }
+        }
+
+        public string PatternInsideClass
+        {
             get { return _from == _to ? _from.Pattern : string.Format("{0}-{1}", _from.Pattern, _to.Pattern); }
         }
 
         public override string ToString()
         {
-            return Pattern;
+            return PatternInsideClass;
         }
     }
 }

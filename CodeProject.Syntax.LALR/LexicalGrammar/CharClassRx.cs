@@ -28,26 +28,14 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public bool Positive { get { return _positive; } }
 
-        public string PatternWithoutBrackets
-        {
-            get
-            {
-                return string.Concat(_chars.Select(ItemToPattern));
-            }
-        }
-
         private string ItemToPattern(ISingleCharRx expr)
         {
             var subClass = expr as IClassRx;
-            if (subClass != null)
+            if (subClass != null && Positive != subClass.Positive)
             {
-                if (Positive != subClass.Positive)
-                {
-                    throw new ArgumentException("Cannot mix positive and negative character classes", "expr");
-                }
-                return subClass.PatternWithoutBrackets;
+                throw new ArgumentException("Cannot mix positive and negative character classes", "expr");
             }
-            return expr.Pattern;
+            return expr.PatternInsideClass;
         }
 
         public static GroupRx operator *(CharClassRx @this, Multiplicity multiplicity)
@@ -57,7 +45,12 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public string Pattern
         {
-            get { return string.Format("[{0}{1}]", _positive ? "" : "^", PatternWithoutBrackets); }
+            get { return string.Format("[{0}{1}]", _positive ? "" : "^", PatternInsideClass); }
+        }
+
+        public string PatternInsideClass
+        {
+            get { return string.Concat(_chars.Select(ItemToPattern)); }
         }
 
         public override string ToString()

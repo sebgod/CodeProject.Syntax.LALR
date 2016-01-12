@@ -8,9 +8,23 @@ namespace CodeProject.Syntax.LALR.Tests
 {
     public class RxTests
     {
-        [TestCase('a', Result = "a")]
-        [TestCase('s', Result = @"s")]
+        [TestCase('a',  Result = "a")]
+        [TestCase('s',  Result = @"s")]
         [TestCase('\\', Result = @"\\")]
+        [TestCase('.',  Result = @"\.")]
+        [TestCase('^',  Result = @"\^")]
+        [TestCase('$', Result = @"\$")]
+        [TestCase('*',  Result = @"\*")]
+        [TestCase('+',  Result = @"\+")]
+        [TestCase('-',  Result = "-")]
+        [TestCase('?',  Result = @"\?")]
+        [TestCase('(',  Result = @"\(")]
+        [TestCase(')',  Result = @"\)")]
+        [TestCase('{',  Result = @"\{")]
+        [TestCase('}',  Result = "}")]
+        [TestCase('[',  Result = @"\[")]
+        [TestCase(']',  Result = "]")]
+        [TestCase('|',  Result = @"\|")]
         [TestCase(0x1D400, Result = @"\U0001D400")]
         public string TestCharRx(int cp)
         {
@@ -19,6 +33,7 @@ namespace CodeProject.Syntax.LALR.Tests
 
         [TestCase('a', 'b', 'c', Result = "abc")]
         [TestCase('\\', 's', Result = @"\\s")]
+        [TestCase('.', '[', Result = @"\.\[")]
         public string TestCharSequenceRx(params int[] chars)
         {
             return new CharSequenceRx(chars).Pattern;
@@ -44,6 +59,14 @@ namespace CodeProject.Syntax.LALR.Tests
         [TestCase('a', 'a', Result = "a")]
         [TestCase('b', 'a', ExpectedException = typeof(ArgumentException))]
         public string TestCharRangeRx(int a, int b)
+        {
+            return new CharRangeRx(a, b).PatternInsideClass;
+        }
+
+        [TestCase('a', 'b', ExpectedException = typeof(InvalidOperationException))]
+        [TestCase('a', 'a', ExpectedException = typeof(InvalidOperationException))]
+        [TestCase('b', 'a', ExpectedException = typeof(ArgumentException))]
+        public string TestCharRangeRxPatternEx(int a, int b)
         {
             return new CharRangeRx(a, b).Pattern;
         }
@@ -73,8 +96,14 @@ namespace CodeProject.Syntax.LALR.Tests
 
         private readonly object[] _charClassSource = new object[]
             {
-                new TestCaseData(true, MakeRxArray('a', 'b', 'c')).Returns(@"[abc]"),
+                new TestCaseData(true, MakeRxArray('a', 'b', 'c')).Returns("[abc]"),
                 new TestCaseData(true, MakeRxArray('\\', 's')).Returns(@"[\\s]"),
+                new TestCaseData(true, MakeRxArray('.', '[')).Returns("[.[]"),
+                new TestCaseData(true, MakeRxArray('.', ']')).Returns("[.]]"),
+                new TestCaseData(true, MakeRxArray('^')).Returns(@"[\^]"),
+                new TestCaseData(true, MakeRxArray('-')).Returns(@"[\-]"),
+                new TestCaseData(true, MakeRxArray('-', '\\', '^')).Returns(@"[\-\\\^]"),
+                new TestCaseData(true, MakeRxArray('^', '-', '\\')).Returns(@"[\^\-\\]"),
                 new TestCaseData(true, MakeRxArray(new CharClassRx('\\', 's'))).Returns(@"[\\s]"),
                 new TestCaseData(true, MakeRxArray(new CharClassRx(false, '\\', 's')))
                     .Throws(typeof (ArgumentException)),
