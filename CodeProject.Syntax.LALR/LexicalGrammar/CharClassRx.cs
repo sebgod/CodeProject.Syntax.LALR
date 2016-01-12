@@ -8,20 +8,38 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         private readonly ISingleCharRx[] _chars;
         private readonly bool _positive;
 
-        public CharClassRx(params int[] chars)
-            : this(true, chars.Select(p => (ISingleCharRx)(CharRx)p).ToArray())
+        public CharClassRx(int first, params int[] rest)
+            : this(true, first, rest)
         {
-            // calls CharClassRx(bool positive, params CharRx[] chars)
+            // calls CharClassRx(bool positive, int first, params int[] rest)
         }
 
-        public CharClassRx(bool positive, params int[] chars)
-            : this(positive, chars.Select(p => (ISingleCharRx)(CharRx)p).ToArray())
+        public CharClassRx(bool positive, int first, params int[] rest)
         {
-            // calls CharClassRx(bool positive, params CharRx[] chars)
+            if (rest == null)
+            {
+                throw new ArgumentNullException("rest");
+            }
+            _positive = positive;
+            _chars = new ISingleCharRx[1 + rest.Length];
+            _chars[0] = (CharRx)first;
+            for (var i = 0; i < rest.Length; i++)
+            {
+                _chars[i + 1] = (CharRx)rest[i];
+            }
         }
 
         public CharClassRx(bool positive, params ISingleCharRx[] chars)
         {
+            if (chars == null)
+            {
+                throw new ArgumentNullException("chars");
+            }
+            if (chars.Length == 0)
+            {
+                throw new ArgumentException("Cannot create an empty set", "chars");
+            }
+
             _positive = positive;
             _chars = chars;
         }
