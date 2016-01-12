@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
@@ -32,7 +29,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             {
                 return _items.Length == 1
                     ? _items[0].Pattern + _multiplicity
-                    : string.Format("({0}){1}", string.Concat(_items.Select(p => p.Pattern)) + _multiplicity.Pattern);
+                    : string.Format("({0}){1}", string.Concat(_items.Select(p => p.Pattern)), _multiplicity.Pattern);
             }
         }
 

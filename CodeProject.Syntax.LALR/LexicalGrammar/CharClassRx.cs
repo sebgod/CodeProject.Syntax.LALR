@@ -55,6 +55,11 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             return new GroupRx(multiplicity, @this);
         }
 
+        public static GroupRx operator *(CharClassRx @this, int times)
+        {
+            return new GroupRx(new Multiplicity(times), @this);
+        }
+
         public string Pattern
         {
             get { return string.Format("[{0}{1}]", _positive ? "" : "^", PatternWithoutBrackets); }

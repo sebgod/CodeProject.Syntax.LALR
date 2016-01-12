@@ -67,6 +67,11 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             return new GroupRx(multiplicity, @this);
         }
 
+        public static GroupRx operator *(CharRx @this, int times)
+        {
+            return new GroupRx(new Multiplicity(times), @this);
+        }
+
         public override string ToString()
         {
             return Pattern;
