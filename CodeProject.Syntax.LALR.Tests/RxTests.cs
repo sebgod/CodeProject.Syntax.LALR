@@ -179,7 +179,7 @@ namespace CodeProject.Syntax.LALR.Tests
         [TestCase(null, ExpectedException = typeof(ArgumentNullException))]
         public void TestGroupRxPreconditions(IRx[] items)
         {
-            new GroupRx(Multiplicity.Once, items);
+            GC.KeepAlive(new GroupRx(Multiplicity.Once, items));
         }
 
         [Test]
@@ -207,7 +207,29 @@ namespace CodeProject.Syntax.LALR.Tests
         [TestCase(+1, +2, null, Result = "(){1,2}")]
         public string TestCharSequenceRxMultiplicity(int from, int to, string sequence)
         {
-            return (((CharSequenceRx)sequence) * new Multiplicity(from, to)).Pattern;
+            return (((CharSequenceRx) sequence)*new Multiplicity(from, to)).Pattern;
+        }
+
+        [TestCaseSource("_groupSource")]
+        public string TestGroupMultiplicity(Multiplicity multiplicity, IList<IRx> exprs)
+        {
+            return new GroupRx(multiplicity, exprs.ToArray()).Pattern;
+        }
+
+        [TestCase(0, 'a',  Result = "a{0}")]
+        [TestCase(3, '\\', Result = @"\\{3}")]
+        [TestCase(7, 0x1D400, Result = @"\U0001D400{7}")]
+        public string TestCharMultiplicity(int times, int codepoint)
+        {
+            return (((CharRx)codepoint) * times).Pattern;
+        }
+
+        [TestCase(0, 'a', 'b', Result = "[ab]{0}")]
+        [TestCase(3, '\\', 's', Result = @"[\\s]{3}")]
+        [TestCase(7, 0x1D400, '-', Result = @"[\U0001D400\-]{7}")]
+        public string TestCharGroupMultiplicity(int times, int first, params int[] rest)
+        {
+            return (new CharClassRx(first, rest) * times).Pattern;
         }
 
         [TestCaseSource("_charClassSource")]
@@ -218,32 +240,53 @@ namespace CodeProject.Syntax.LALR.Tests
 
         private readonly object[] _charClassSource = new object[]
             {
-                new TestCaseData(true, MakeRxArray('a', 'b', 'c')).Returns("[abc]"),
-                new TestCaseData(true, MakeRxArray('\\', 's')).Returns(@"[\\s]"),
-                new TestCaseData(true, MakeRxArray('.', '[')).Returns("[.[]"),
-                new TestCaseData(true, MakeRxArray('.', ']')).Returns("[.]]"),
-                new TestCaseData(true, MakeRxArray('^')).Returns(@"[\^]"),
-                new TestCaseData(true, MakeRxArray('-')).Returns(@"[\-]"),
-                new TestCaseData(true, MakeRxArray('-', '\\', '^')).Returns(@"[\-\\\^]"),
-                new TestCaseData(true, MakeRxArray('^', '-', '\\')).Returns(@"[\^\-\\]"),
-                new TestCaseData(true, MakeRxArray(new CharClassRx('\\', 's'))).Returns(@"[\\s]"),
-                new TestCaseData(true, MakeRxArray(new CharClassRx(false, '\\', 's')))
+                new TestCaseData(true, Chars('a', 'b', 'c')).Returns("[abc]"),
+                new TestCaseData(true, Chars('\\', 's')).Returns(@"[\\s]"),
+                new TestCaseData(true, Chars('.', '[')).Returns("[.[]"),
+                new TestCaseData(true, Chars('.', ']')).Returns("[.]]"),
+                new TestCaseData(true, Chars('^')).Returns(@"[\^]"),
+                new TestCaseData(true, Chars('-')).Returns(@"[\-]"),
+                new TestCaseData(true, Chars('-', '\\', '^')).Returns(@"[\-\\\^]"),
+                new TestCaseData(true, Chars('^', '-', '\\')).Returns(@"[\^\-\\]"),
+                new TestCaseData(true, Chars(new CharClassRx('\\', 's'))).Returns(@"[\\s]"),
+                new TestCaseData(true, Chars(new CharClassRx(false, '\\', 's')))
                     .Throws(typeof (ArgumentException)),
-                new TestCaseData(false, MakeRxArray(new CharClassRx(false, '\\', 's'))).Returns(@"[^\\s]"),
-                new TestCaseData(false, MakeRxArray(new CharClassRx('\\', 's')))
+                new TestCaseData(false, Chars(new CharClassRx(false, '\\', 's')))
+                    .Returns(@"[^\\s]"),
+                new TestCaseData(false, Chars(new CharClassRx('\\', 's')))
                     .Throws(typeof (ArgumentException)),
-                new TestCaseData(true, MakeRxArray(new CharClassRx(false, 'a'), new CharClassRx('b')))
+                new TestCaseData(true, Chars(new CharClassRx(false, 'a'), new CharClassRx('b')))
                     .Throws(typeof (ArgumentException)),
-                new TestCaseData(true, MakeRxArray(new CharRangeRx('A', 'Z'), new CharRangeRx('a', 'z')))
+                new TestCaseData(true, Chars(new CharRangeRx('A', 'Z'), new CharRangeRx('a', 'z')))
                     .Returns("[A-Za-z]")
             };
 
-        private static object MakeRxArray(params ISingleCharRx[] charExprs)
+        private readonly object[] _groupSource = new object[]
+            {
+                new TestCaseData(Multiplicity.OneOrMore, Items(new CharRx('\\'), new CharRx('s')))
+                    .Returns(@"(\\s)+"),
+                new TestCaseData(Multiplicity.ZeroOrOnce, Items(new CharClassRx('a', 'b')))
+                    .Returns(@"[ab]?"),
+                new TestCaseData(new Multiplicity(1, 2), Items(new CharClassRx('a', 'b')))
+                    .Returns(@"[ab]{1,2}"),
+                new TestCaseData(Multiplicity.Once, Items(new CharRx('a'))).Returns("a"),
+                new TestCaseData(Multiplicity.ZeroOrMore, Items(new CharRx('a'))).Returns("a*"),
+                new TestCaseData(new Multiplicity(1, 2), Items(new CharRx('a'))).Returns("a{1,2}"),
+                new TestCaseData(new Multiplicity(5), Items(new CharRx('a'))).Returns("a{5}"),
+                new TestCaseData(new Multiplicity(5, -1), Items(new CharRx('a'))).Returns("a{5,}")
+            };
+
+        private static object Items(params IRx[] exprs)
+        {
+            return new PrintableList<IRx>(exprs);
+        }
+
+        private static object Chars(params ISingleCharRx[] charExprs)
         {
             return new PrintableList<ISingleCharRx>(charExprs);
         }
 
-        private static object MakeRxArray(params int[] chars)
+        private static object Chars(params int[] chars)
         {
             var count = chars.Length;
             var array = new PrintableList<ISingleCharRx>(count);
