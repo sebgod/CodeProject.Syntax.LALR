@@ -69,11 +69,16 @@
   <ItemGroup>
     <Compile Include="AsyncLACharIteratorTests.cs" />
     <Compile Include="AsyncLATokenIteratorTests.cs" />
+    <Compile Include="CharClassRxTests.cs" />
+    <Compile Include="CharRangeRxTests.cs" />
+    <Compile Include="CharRxTests.cs" />
+    <Compile Include="CharSequenceRxTests.cs" />
     <Compile Include="GrammarTests.cs" />
+    <Compile Include="GroupRxTests.cs" />
     <Compile Include="PrintableList.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RxTests.cs" />
-    <Compile Include="TestHelper.cs" />
+    <Compile Include="MultiplicityTests.cs" />
+    <Compile Include="Helper.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj">

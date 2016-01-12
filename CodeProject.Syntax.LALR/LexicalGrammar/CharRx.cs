@@ -95,15 +95,12 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
                 {
                     return string.Format(@"\U{0}", _codepoint.ToString("X8"));
                 }
-                else
+                switch (_codepoint)
                 {
-                    switch (_codepoint)
-                    {
-                        case '^': return @"\^";
-                        case '-': return @"\-";
-                        case '\\': return @"\\";
-                        default: return char.ConvertFromUtf32(_codepoint);
-                    }
+                    case '^': return @"\^";
+                    case '-': return @"\-";
+                    case '\\': return @"\\";
+                    default: return char.ConvertFromUtf32(_codepoint);
                 }
             }
         }
