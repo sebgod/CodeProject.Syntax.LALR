@@ -9,7 +9,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         private readonly IList<CharRx> _chars;
 
         public CharSequenceRx(params int[] chars)
-            : this(chars != null ? chars.Select(p => (CharRx) p).ToArray() : null as CharRx[])
+            : this(chars != null ? chars.Select(p => (CharRx) p).ToArray() : null)
         {
             // calls CharSequenceRx(params CharRx[] chars)
         }

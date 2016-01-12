@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using CodeProject.Syntax.LALR.LexicalGrammar;
-using CodeProject.Syntax.LALR.Utilities;
 
 namespace CodeProject.Syntax.LALR
 {
@@ -605,7 +604,7 @@ namespace CodeProject.Syntax.LALR
                         {
                             _parseTable.Actions[nStateID, nToken + 1] = reduceActions[0];
                         }
-                        else if (derivation == Derivation.RightMost && !shiftAction.HasValue)
+                        else if (derivation == Derivation.RightMost && shiftAction.HasValue)
                         {
                             _parseTable.Actions[nStateID, nToken + 1] = shiftAction.Value;
                         }
