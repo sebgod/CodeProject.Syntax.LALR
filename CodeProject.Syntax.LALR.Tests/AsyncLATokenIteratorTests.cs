@@ -10,7 +10,7 @@ namespace CodeProject.Syntax.LALR.Tests
         [Test, TestCaseSource("_tokenSource")]
         public async Task TestTokenIteration(IList<Token> expectedTokens)
         {
-            using (var tokenIterator = new AsyncLATokenIterator(new AsyncEnumerableWrapper(expectedTokens)))
+            using (var tokenIterator = new AsyncLATokenIterator(expectedTokens.AsAsync()))
             {
                 for (var i = 0; i < expectedTokens.Count; i++)
                 {
@@ -31,7 +31,7 @@ namespace CodeProject.Syntax.LALR.Tests
         [Test(Description = "Test optional iterator resetting functionality")]
         public async Task TestSupportResetting(IList<Token> expectedTokens)
         {
-            using (var tokenIterator = new AsyncLATokenIterator(new AsyncEnumerableWrapper(expectedTokens)))
+            using (var tokenIterator = new AsyncLATokenIterator(expectedTokens.AsAsync()))
             {
                 if (tokenIterator.SupportsResetting)
                 {

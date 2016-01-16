@@ -141,7 +141,7 @@ namespace TestProject
             var inputSource = TestLarge();
 #endif
             Token result;
-            using (var tokenIterator = new AsyncLATokenIterator(new AsyncEnumerableWrapper(inputSource)))
+            using (var tokenIterator = new AsyncLATokenIterator(inputSource.AsAsync()))
             {
                 result = await parser.ParseInputAsync(tokenIterator, debugger, allowRewriting: true);
             }

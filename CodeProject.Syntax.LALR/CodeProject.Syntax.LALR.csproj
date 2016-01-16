@@ -35,7 +35,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="AsyncEnumerableWrapper.cs" />
+    <Compile Include="LexicalGrammar\AsyncEnumerableWrapper.cs" />
     <Compile Include="LexicalGrammar\CharClassRx.cs" />
     <Compile Include="LexicalGrammar\CharRangeRx.cs" />
     <Compile Include="LexicalGrammar\CharSequenceRx.cs" />
