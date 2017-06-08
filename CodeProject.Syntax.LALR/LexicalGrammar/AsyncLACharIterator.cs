@@ -31,15 +31,15 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public async Task<int> LookAheadAsync()
         {
-            return await CodepointAtIndex(1);
+            return await CodepointAtIndexAsync(1);
         }
 
         public async Task<int> CurrentAsync()
         {
-            return await CodepointAtIndex();
+            return await CodepointAtIndexAsync();
         }
 
-        private async Task<int> CodepointAtIndex(int lookAhead = 0)
+        private async Task<int> CodepointAtIndexAsync(int lookAhead = 0)
         {
             if (_index == NotInitialised)
             {
@@ -48,7 +48,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
             if (_index + lookAhead >= _chars.Length)
             {
-                if (await RefillBuffer() <= 0)
+                if (await RefillBufferAsync() <= 0)
                 {
                     return EOF;
                 }
@@ -58,7 +58,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
             if (char.IsHighSurrogate(unit))
             {
-                // RefillBuffer guarantees that a high surrogate will never be the last code unit
+                // RefillBufferAsync guarantees that a high surrogate will never be the last code unit
                 var low = _chars[_index + 1 + lookAhead];
                 if (lookAhead == 0)
                 {
@@ -75,10 +75,10 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             {
                 return true;
             }
-            return await RefillBuffer() > 0;
+            return await RefillBufferAsync() > 0;
         }
 
-        private async Task<int> RefillBuffer()
+        private async Task<int> RefillBufferAsync()
         {
             if (_index < 0)
             {

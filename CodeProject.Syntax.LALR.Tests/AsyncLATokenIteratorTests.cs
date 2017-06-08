@@ -8,7 +8,7 @@ namespace CodeProject.Syntax.LALR.Tests
     public class AsyncLATokenIteratorTests
     {
         [Test, TestCaseSource("_tokenSource")]
-        public async Task TestTokenIteration(IList<Token> expectedTokens)
+        public async Task TestTokenIteration(IList<Item> expectedTokens)
         {
             using (var tokenIterator = new AsyncLATokenIterator(expectedTokens.AsAsync()))
             {
@@ -20,7 +20,7 @@ namespace CodeProject.Syntax.LALR.Tests
                         i, expectedTokens[i], current);
 
                     var la = await tokenIterator.LookAheadAsync();
-                    var expectedLA = i + 1 < expectedTokens.Count ? expectedTokens[i + 1] : Token.EOF;
+                    var expectedLA = i + 1 < expectedTokens.Count ? expectedTokens[i + 1] : Item.EOF;
                     Assert.That(la, Is.EqualTo(expectedLA), "Lookahead i={0} expected={1} is={2}",
                         i, expectedLA, la);
                 }
@@ -29,7 +29,7 @@ namespace CodeProject.Syntax.LALR.Tests
 
         [TestCaseSource("_tokenSource")]
         [Test(Description = "Test optional iterator resetting functionality")]
-        public async Task TestSupportResetting(IList<Token> expectedTokens)
+        public async Task TestSupportResetting(IList<Item> expectedTokens)
         {
             using (var tokenIterator = new AsyncLATokenIterator(expectedTokens.AsAsync()))
             {
@@ -52,17 +52,17 @@ namespace CodeProject.Syntax.LALR.Tests
 
         private readonly object[] _tokenSource = new object[]
         {
-            new TestCaseData(new PrintableList<Token>
+            new TestCaseData(new PrintableList<Item>
             {
-                new Token(6, 2),
-                new Token(2, "+"),
-                new Token(7, "("),
-                new Token(6, 0),
-                new Token(4, "*"),
-                new Token(6, int.MaxValue),
-                new Token(8, ")")
+                new Item(6, 2),
+                new Item(2, "+"),
+                new Item(7, "("),
+                new Item(6, 0),
+                new Item(4, "*"),
+                new Item(6, int.MaxValue),
+                new Item(8, ")")
             }),
-            new TestCaseData(new PrintableList<Token>())
+            new TestCaseData(new PrintableList<Item>())
         };
     }
 }

@@ -37,15 +37,15 @@ namespace CodeProject.Syntax.LALR
             _builder.Clear();
         }
 
-        public void WriteFinalToken(string acceptMsg, string failMsg, Token token)
+        public void WriteFinalToken(string acceptMsg, string failMsg, Item item)
         {
-            if (token.IsError && _errorWriter != null)
+            if (item.IsError && _errorWriter != null)
             {
-                _errorWriter(failMsg + TokenInfo(token) + Environment.NewLine);
+                _errorWriter(failMsg + TokenInfo(item) + Environment.NewLine);
             }
-            else if (token.State == 0 && _infoWriter != null)
+            else if (item.State == 0 && _infoWriter != null)
             {
-                _infoWriter(acceptMsg + TokenInfo(token) + Environment.NewLine);
+                _infoWriter(acceptMsg + TokenInfo(item) + Environment.NewLine);
             }
         }
 
@@ -55,17 +55,17 @@ namespace CodeProject.Syntax.LALR
         }
 
         /// <summary>
-        /// Gets the name of a particular token
+        /// Gets the name of a particular Item
         /// </summary>
         /// <param name="nTokenID">
-        /// The token id <see cref="System.Int32"/>
+        /// The Item id <see cref="System.Int32"/>
         /// </param>
         /// <returns>
-        /// The token name <see cref="System.String"/>
+        /// The Item name <see cref="System.String"/>
         /// </returns>
         public string GetTokenName(int nTokenID)
         {
-            return nTokenID == -1 ? "$" : _parser.Grammar.TokenCategories[nTokenID].Name;
+            return nTokenID == -1 ? "$" : _parser.Grammar.SymbolNames[nTokenID].Name;
         }
 
         /// <summary>
@@ -77,7 +77,7 @@ namespace CodeProject.Syntax.LALR
         [Conditional(Condition)]
         public void DumpLR0Item(LR0Item item)
         {
-            _builder.Append(_parser.Grammar.TokenCategories[_parser.Productions[item.Production].Left]);
+            _builder.Append(_parser.Grammar.SymbolNames[_parser.Productions[item.Production].Left]);
             _builder.Append(" ->");
             int nPosition = 0;
             for (; ; )
@@ -91,7 +91,7 @@ namespace CodeProject.Syntax.LALR
                     break;
                 }
                 int nToken = _parser.Productions[item.Production].Right[nPosition];
-                _builder.Append(" " + _parser.Grammar.TokenCategories[nToken]);
+                _builder.Append(" " + _parser.Grammar.SymbolNames[nToken]);
 
                 nPosition++;
             }
@@ -160,18 +160,18 @@ namespace CodeProject.Syntax.LALR
         }
 
         /// <summary>
-        /// Outputs the first sets of each token
+        /// Outputs the first sets of each Item
         /// </summary>
         [Conditional(Condition)]
         public void DumpFirstSets()
         {
-            for (var nToken = 0; nToken < _parser.Grammar.TokenCategories.Length; nToken++)
+            for (var nToken = 0; nToken < _parser.Grammar.SymbolNames.Length; nToken++)
             {
                 _builder.AppendFormat("FIRST({0}) = {{{1}}}",
-                                      _parser.Grammar.TokenCategories[nToken],
+                                      _parser.Grammar.SymbolNames[nToken],
                                       string.Join(", ",
                                                   _parser.FirstSets[nToken].Select(
-                                                      pFirst => pFirst == -1 ? "#" : _parser.Grammar.TokenCategories[pFirst].Name))
+                                                      pFirst => pFirst == -1 ? "#" : _parser.Grammar.SymbolNames[pFirst].Name))
                     );
             }
         }
@@ -260,7 +260,7 @@ namespace CodeProject.Syntax.LALR
         public void DumpLR1Item(LR1Item lr1Item)
         {
             var item = _parser.LR0Items[lr1Item.LR0ItemID];
-            _builder.Append(_parser.Grammar.TokenCategories[_parser.Productions[item.Production].Left]);
+            _builder.Append(_parser.Grammar.SymbolNames[_parser.Productions[item.Production].Left]);
             _builder.Append(" ->");
             int nPosition = 0;
             for (; ; )
@@ -274,7 +274,7 @@ namespace CodeProject.Syntax.LALR
                     break;
                 }
                 int nToken = _parser.Productions[item.Production].Right[nPosition];
-                _builder.Append(" ").Append(_parser.Grammar.TokenCategories[nToken]);
+                _builder.Append(" ").Append(_parser.Grammar.SymbolNames[nToken]);
 
                 nPosition++;
             }
@@ -284,7 +284,7 @@ namespace CodeProject.Syntax.LALR
             }
             else
             {
-                _builder.Append(", ").Append(_parser.Grammar.TokenCategories[lr1Item.LookAhead]);
+                _builder.Append(", ").Append(_parser.Grammar.SymbolNames[lr1Item.LookAhead]);
             }
             _builder.AppendLine();
         }
@@ -380,20 +380,24 @@ namespace CodeProject.Syntax.LALR
         }
 
         [Conditional(Condition)]
-        public void DumpParsingState(int state, IEnumerable<Token> tokenStack, Token token, Action action)
+        public void DumpParsingState(int state, IEnumerable<Item> tokenStack, Item item, Action action)
         {
-            _builder.AppendFormat("state={0,-3} la={1,-4} {2,-10} {3}", state, token, action,
+            _builder.AppendFormat("state={0,-3} la={1,-4} {2,-10} {3}", state, item, action,
                                   string.Join(", ", tokenStack.Select(TokenInfo))).AppendLine();
         }
 
-        public string TokenInfo(Token token)
+        public string TokenInfo(Item item)
+        {
+            return TokenInfo(item, false);
+        }
+        public string TokenInfo(Item item, bool detailed)
         {
             var info = new StringBuilder(20);
-            TokenInfo(token, info);
+            TokenInfo(item, info, detailed);
             return info.ToString();
         }
 
-        private void TokenInfo(Token token, StringBuilder info)
+        private void TokenInfo(Item item, StringBuilder info, bool detailed = false)
         {
             if (info.Length > 70)
             {
@@ -401,13 +405,13 @@ namespace CodeProject.Syntax.LALR
                 return;
             }
 
-            var name = GetTokenName(token.ID);
-            if (_parser.NonTerminals.Contains(token.ID))
+            var name = GetTokenName(item.ID);
+            if (_parser.NonTerminals.Contains(item.ID))
             {
-                switch (token.ContentType)
+                switch (item.ContentType)
                 {
                     case ContentType.Reduction:
-                        var reduction = token.Reduction;
+                        var reduction = item.Reduction;
                         var production = _parser.Productions[reduction.Production];
                         info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
                         for (var i = 0; i < reduction.Children.Count; i++)
@@ -422,14 +426,18 @@ namespace CodeProject.Syntax.LALR
                         break;
                     case ContentType.Nested:
                         info.AppendFormat("{0}->[", name);
-                        TokenInfo(token.Nested, info);
+                        TokenInfo(item.Nested, info);
                         info.Append(']');
                         break;
                 }
             }
+            else if (detailed)
+            {
+                info.AppendFormat("[{0}] {1} \"{2}\"", item.ID, name, item);
+            }
             else
             {
-                info.Append(token);
+                info.Append(item);
             }
         }
 // ReSharper restore MemberCanBePrivate.Global

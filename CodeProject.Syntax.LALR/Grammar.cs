@@ -18,11 +18,11 @@ namespace CodeProject.Syntax.LALR
     /// <summary>
     /// A grammatical production
     /// </summary>
-    public class Production
+    public struct Production
     {
         private readonly int _left;
         private readonly int[] _right;
-        private readonly Func<int, Token[], object> _rewriter;
+        private readonly Func<int, Item[], object> _rewriter;
 
         public int Left
         {
@@ -37,17 +37,17 @@ namespace CodeProject.Syntax.LALR
         public Production(int left, params int[] right)
             : this(left, null, right)
         {
-            // calls Production(int left, Func<Token[], object> rewriter, params int[] right)
+            // calls below
         }
 
-        public Production(int left, Func<int, Token[], object> rewriter, params int[] right)
+        public Production(int left, Func<int, Item[], object> rewriter, params int[] right)
         {
             _left = left;
             _right = right;
             _rewriter = rewriter;
         }
 
-        public object Rewrite(Token[] children)
+        public object Rewrite(Item[] children)
         {
             return _rewriter != null ? _rewriter(Left, children) : null;;
         }
@@ -59,16 +59,16 @@ namespace CodeProject.Syntax.LALR
     public class Reduction
     {
         private readonly int _production;
-        private readonly Token[] _children;
+        private readonly Item[] _children;
 
         /// <summary>
         /// Reference to the reduced production in the production table
         /// </summary>
         public int Production { get { return _production; } }
 
-        public IList<Token> Children { get { return _children; } }
+        public IList<Item> Children { get { return _children; } }
 
-        public Reduction(int production, params Token[] children)
+        public Reduction(int production, params Item[] children)
         {
             _production = production;
             _children = children;
@@ -98,22 +98,28 @@ namespace CodeProject.Syntax.LALR
     /// </summary>
     public struct Grammar
     {
-        private readonly TokenCategory[] _tokenCategories;
+        private readonly SymbolName[] _symbolNames;
         private readonly PrecedenceGroup[] _precedenceGroups;
 
-        public TokenCategory[] TokenCategories { get { return _tokenCategories; } }
+        public SymbolName[] SymbolNames { get { return _symbolNames; } }
 
         public PrecedenceGroup[] PrecedenceGroups { get { return _precedenceGroups; } }
 
-        public Grammar(string[] tokenCategories, params PrecedenceGroup[] precedenceGroups)
-            : this(tokenCategories.Select((pName, pIndex) => new TokenCategory(pIndex, pName)).ToArray(), precedenceGroups)
+        public Grammar(string[] symbolNames, params PrecedenceGroup[] precedenceGroups)
+            : this(AsSymbolNames(symbolNames), precedenceGroups)
         {
-            // calls Grammar(TokenCategory[] tokenCategories, params PrecedenceGroup[] precedenceGroups)
+            // calls below
         }
-        public Grammar(TokenCategory[] tokenCategories, params PrecedenceGroup[] precedenceGroups)
+
+        public Grammar(SymbolName[] symbolNames, params PrecedenceGroup[] precedenceGroups)
         {
-            _tokenCategories = tokenCategories;
+            _symbolNames = symbolNames;
             _precedenceGroups = precedenceGroups;
+        }
+
+        private static SymbolName[] AsSymbolNames(params string[] symbolNames)
+        {
+            return symbolNames.Select((pName, pIndex) => new SymbolName(pIndex, pName)).ToArray();
         }
     };
 }

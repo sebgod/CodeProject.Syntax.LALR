@@ -6,52 +6,14 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
     public enum ContentType : byte
     {
-        Empty,
         Reduction,
         Nested,
-        Leaf
+        Scalar
     }
 
-    public struct TokenCategory : IEquatable<TokenCategory>
+    public class Item : IEquatable<Item>
     {
-        private readonly int _id;
-
-        private readonly string _name;
-
-        public int ID { get { return _id; } }
-
-        public string Name { get { return _name; } }
-
-        public TokenCategory(int id, string name)
-        {
-            _id = id;
-            _name = name;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is TokenCategory && Equals((TokenCategory)obj);
-        }
-
-        public override int GetHashCode()
-        {
-            return _id;
-        }
-
-        public override string ToString()
-        {
-            return string.Format("{0}: {1}", ID, Name);
-        }
-
-        public bool Equals(TokenCategory other)
-        {
-            return _id == other.ID;
-        }
-    }
-
-    public class Token : IEquatable<Token>
-    {
-        public static readonly Token EOF = new Token(-1, "$");
+        public static readonly Item EOF = new Item(-1, "$");
 
         private readonly int _id;
         private readonly object _content;
@@ -63,13 +25,13 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public Reduction Reduction { get { return (Reduction) _content; } }
 
-        public Token Nested { get { return (Token) _content; } }
+        public Item Nested { get { return (Item) _content; } }
 
         public int State { get; set; }
 
         public ContentType ContentType { get { return _contentType; } }
 
-        public Token(int id, object content)
+        public Item(int id, object content)
         {
             _id = id;
             _content = content;
@@ -78,13 +40,13 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             State = ContentType == ContentType.Reduction && Reduction.Children.Any(p => p.IsError) ? -1 : id;
         }
 
-        public static ContentType DetermineContentType(object content)
+        private static ContentType DetermineContentType(object content)
         {
             if (content == null)
             {
-                return ContentType.Empty;
+                return ContentType.Scalar;
             }
-            if (content is Token)
+            if (content is Item)
             {
                 return ContentType.Nested;
             }
@@ -92,7 +54,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             {
                 return ContentType.Reduction;
             }
-            return ContentType.Leaf;
+            return ContentType.Scalar;
         }
 
         public bool IsError
@@ -108,7 +70,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
                 switch (_contentType)
                 {
                     case ContentType.Nested:
-                        isError = ((Token) _content).IsError;
+                        isError = ((Item) _content).IsError;
                         break;
 
                     case ContentType.Reduction:
@@ -123,7 +85,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             }
         }
 
-        public bool Equals(Token other)
+        public bool Equals(Item other)
         {
             return ID == other.ID;
         }
@@ -135,7 +97,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public override bool Equals(object obj)
         {
-            return obj is Token && Equals((Token) obj);
+            return obj is Item && Equals((Item) obj);
         }
 
         private static string ContentToString(object content)

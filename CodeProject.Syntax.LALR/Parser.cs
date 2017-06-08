@@ -232,7 +232,7 @@ namespace CodeProject.Syntax.LALR
         }
 
         /// <summary>
-        /// takes an LR0 state, and a tokenID, and produces the next state given the token and productions of the grammar
+        /// takes an LR0 state, and a tokenID, and produces the next state given the Item and productions of the grammar
         /// </summary>
         int GotoLR0(int nState, int nTokenID, ref bool bAdded, ref int nPrecedence)
         {
@@ -272,11 +272,11 @@ namespace CodeProject.Syntax.LALR
                 open.RemoveAt(0);
                 while (_lrGotos.Count <= nState)
                 {
-                    _lrGotos.Add(new int[_grammar.TokenCategories.Length]);
-                    _gotoPrecedence.Add(new int[_grammar.TokenCategories.Length]);
+                    _lrGotos.Add(new int[_grammar.SymbolNames.Length]);
+                    _gotoPrecedence.Add(new int[_grammar.SymbolNames.Length]);
                 }
 
-                for (int nToken = 0; nToken < _grammar.TokenCategories.Length; nToken++)
+                for (int nToken = 0; nToken < _grammar.SymbolNames.Length; nToken++)
                 {
                     bool bAdded = false;
                     int nPrecedence = Int32.MinValue;
@@ -295,7 +295,7 @@ namespace CodeProject.Syntax.LALR
 
 
         /// <summary>
-        /// Computes the set of first terminals for each token in the grammar
+        /// Computes the set of first terminals for each Item in the grammar
         /// </summary>
         void ComputeFirstSets()
         {
@@ -481,7 +481,7 @@ namespace CodeProject.Syntax.LALR
         /// </summary>
         void InitSymbols()
         {
-            for (int nSymbol = 0; nSymbol < _grammar.TokenCategories.Length; nSymbol++)
+            for (int nSymbol = 0; nSymbol < _grammar.SymbolNames.Length; nSymbol++)
             {
                 var isTerminal = _productions.All(production => production.Left != nSymbol);
 
@@ -530,7 +530,7 @@ namespace CodeProject.Syntax.LALR
             {
                 var lalrState = _lalrStates[nStateID];
 
-                for (int nToken = -1; nToken < _grammar.TokenCategories.Length; nToken++)
+                for (int nToken = -1; nToken < _grammar.SymbolNames.Length; nToken++)
                 {
                     var actions = new List<Action>();
                     if (nToken >= 0 && _lrGotos[nStateID][nToken] >= 0)
@@ -643,19 +643,19 @@ namespace CodeProject.Syntax.LALR
         }
 
         /// <summary>
-        /// Based on: http://www.goldparser.org/doc/engine-pseudo/parse-token.htm
+        /// Based on: http://www.goldparser.org/doc/engine-pseudo/parse-Item.htm
         /// </summary>
-        /// <param name="tokenIterator">Token iterator which will be owned by the caller</param>
+        /// <param name="tokenIterator">Item iterator which will be owned by the caller</param>
         /// <param name="debugger">Enables debugging support</param>
         /// <param name="trimReductions">If true (default), trim reductions of the form L -> R, where R is a non-terminal</param>
         /// <param name="allowRewriting">Apply rewriting functions</param>
-        /// <returns>The reduced program tree on acceptance or the erroneous token</returns>
-        public async Task<Token> ParseInputAsync(IAsyncLAIterator<Token> tokenIterator, Debug debugger,
+        /// <returns>The reduced program tree on acceptance or the erroneous Item</returns>
+        public async Task<Item> ParseInputAsync(IAsyncLAIterator<Item> tokenIterator, Debug debugger,
             bool trimReductions = true,
             bool allowRewriting = true)
         {
             const int initState = 0;
-            var tokenStack = new Stack<Token>();
+            var tokenStack = new Stack<Item>();
             var state = initState;
 
             while (true)
@@ -677,21 +677,21 @@ namespace CodeProject.Syntax.LALR
                         var nProduction = action.ActionParameter;
                         var production = Productions[nProduction];
                         var nChildren = production.Right.Length;
-                        Token reduction;
+                        Item reduction;
                         if (trimReductions && nChildren == 1 && _nonterminals.Contains(production.Right[0]))
                         {
-                            reduction = new Token(production.Left, tokenStack.Pop().Content);
+                            reduction = new Item(production.Left, tokenStack.Pop().Content);
                         }
                         else
                         {
-                            var children = new Token[nChildren];
+                            var children = new Item[nChildren];
                             for (var i = 0; i < nChildren; i++)
                             {
                                 children[nChildren - i - 1] = tokenStack.Pop();
                             }
                             var rewrite = (allowRewriting ? production.Rewrite(children) : null) ??
                                           new Reduction(nProduction, children);
-                            reduction = new Token(production.Left, rewrite);
+                            reduction = new Item(production.Left, rewrite);
                         }
                         var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
                         state = ParseTable.Actions[lastState, production.Left + 1].ActionParameter;
@@ -736,7 +736,7 @@ namespace CodeProject.Syntax.LALR
             _productions = new List<Production>();
             _productionDerivation = new List<Derivation>();
             _productionPrecedence = new List<int>();
-            var nTokens = _grammar.TokenCategories.Length;
+            var nTokens = _grammar.SymbolNames.Length;
             _firstSets = new HashSet<int>[nTokens];
 
             PopulateProductions();

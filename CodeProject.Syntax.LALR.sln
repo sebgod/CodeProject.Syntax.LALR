@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
-MinimumVisualStudioVersion = 10.0.40219.1
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeProject.Syntax.LALR", "CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj", "{AFE70FCA-47E6-4DC0-9138-3826E565AE6A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject", "TestProject\TestProject.csproj", "{4D9C7794-F2DF-4C55-97A3-BB37425E999D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CodeProject.Syntax.LALR.Tests", "CodeProject.Syntax.LALR.Tests\CodeProject.Syntax.LALR.Tests.csproj", "{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bootstrap", "Bootstrap\Bootstrap.csproj", "{DA206F99-EB50-441F-9269-3FFEAA3465BB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,6 +39,12 @@ Global
 		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|x86.ActiveCfg = Release|Any CPU
 		{4136BE5D-7EE2-49E2-BE61-C5CE4C4E4DEF}.Release|x86.Build.0 = Release|Any CPU
+		{DA206F99-EB50-441F-9269-3FFEAA3465BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA206F99-EB50-441F-9269-3FFEAA3465BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA206F99-EB50-441F-9269-3FFEAA3465BB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DA206F99-EB50-441F-9269-3FFEAA3465BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA206F99-EB50-441F-9269-3FFEAA3465BB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA206F99-EB50-441F-9269-3FFEAA3465BB}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

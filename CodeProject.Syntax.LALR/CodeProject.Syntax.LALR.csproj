@@ -12,6 +12,7 @@
     <AssemblyName>CodeProject.Syntax.LALR</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <TargetFrameworkProfile>Profile7</TargetFrameworkProfile>
+    <MinimumVisualStudioVersion>11.0</MinimumVisualStudioVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -36,12 +37,14 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="LexicalGrammar\AsyncEnumerableWrapper.cs" />
+    <Compile Include="LexicalGrammar\AsyncRegexLexer.cs" />
     <Compile Include="LexicalGrammar\CharClassRx.cs" />
     <Compile Include="LexicalGrammar\CharRangeRx.cs" />
     <Compile Include="LexicalGrammar\CharSequenceRx.cs" />
     <Compile Include="LexicalGrammar\GroupRx.cs" />
     <Compile Include="LexicalGrammar\ISingleCharRx.cs" />
     <Compile Include="LexicalGrammar\Multiplicity.cs" />
+    <Compile Include="LexicalGrammar\SymbolName.cs" />
     <Compile Include="Utilities\BoxDrawing.cs" />
     <Compile Include="Debug.cs" />
     <Compile Include="Grammar.cs" />
@@ -53,8 +56,7 @@
     <Compile Include="LRItems.cs" />
     <Compile Include="Parser.cs" />
     <Compile Include="ParseTable.cs" />
-    <Compile Include="LexicalGrammar\Token.cs" />
-    <Compile Include="LexicalGrammar\Tokeniser.cs" />
+    <Compile Include="LexicalGrammar\Item.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
 </Project>

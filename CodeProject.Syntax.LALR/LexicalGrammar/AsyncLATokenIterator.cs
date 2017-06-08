@@ -2,22 +2,22 @@ using System.Threading.Tasks;
 
 namespace CodeProject.Syntax.LALR.LexicalGrammar
 {
-    public class AsyncLATokenIterator : IAsyncLAIterator<Token>
+    public class AsyncLATokenIterator : IAsyncLAIterator<Item>
     {
-        private readonly IAsyncIterator<Token> _inputSource;
-        private Token _lookAhead;
+        private readonly IAsyncIterator<Item> _inputSource;
+        private Item _lookAhead;
 
-        public AsyncLATokenIterator(IAsyncIterator<Token> inputSource)
+        public AsyncLATokenIterator(IAsyncIterator<Item> inputSource)
         {
             _inputSource = inputSource;
         }
 
-        public async Task<Token> LookAheadAsync()
+        public async Task<Item> LookAheadAsync()
         {
-            return _lookAhead ?? (_lookAhead = await _inputSource.MoveNextAsync() ? await CurrentAsync() : Token.EOF);
+            return _lookAhead ?? (_lookAhead = await _inputSource.MoveNextAsync() ? await CurrentAsync() : Item.EOF);
         }
 
-        public async Task<Token> CurrentAsync()
+        public async Task<Item> CurrentAsync()
         {
             return await _inputSource.CurrentAsync();
         }
