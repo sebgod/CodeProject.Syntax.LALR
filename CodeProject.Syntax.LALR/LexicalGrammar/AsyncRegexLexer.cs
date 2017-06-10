@@ -10,6 +10,7 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
     {
         public const string RootState = "root";
         public const string PopState = "#pop";
+        public const string Ignore = "#ignore";
 
         private readonly IAsyncLAIterator<int> _charSource;
         private readonly IReadOnlyDictionary<string, RegexTuple[]> _patternTable;
@@ -104,13 +105,27 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
             } while (true);
 
             _currentItem = new Item(matchingPattern.Item1, buffer.ToString());
-            if (matchingPattern.Item3 == PopState)
+
+            var instructionList = matchingPattern.Item3;
+
+            if (!string.IsNullOrEmpty(instructionList))
             {
-                _states.Pop();
-            }
-            else if (matchingPattern.Item3 != null)
-            {
-                _states.Push(matchingPattern.Item3);
+                foreach (var instruction in instructionList.Split(new[] {','}, StringSplitOptions.RemoveEmptyEntries))
+                { 
+                    switch (instruction)
+                    {
+                        case PopState:
+                            _states.Pop();
+                            break;
+
+                        case Ignore:
+                            return await MoveNextAsync();
+
+                        default:
+                            _states.Push(matchingPattern.Item3);
+                            break;
+                    }   
+                }
             }
             return true;
         }

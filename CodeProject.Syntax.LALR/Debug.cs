@@ -230,7 +230,7 @@ namespace CodeProject.Syntax.LALR
                 var propogations = propogationsForState[nItem];
                 foreach (var propogation in propogations)
                 {
-                    _builder.Append(" state " + propogation.LR0TargetState + ":");
+                    _builder.Append(" state " + propogation.LR0TargetState + ": ");
                     DumpLR0Item(_parser.LR0Items[propogation.LR0TargetItem]);
                 }
                 _builder.AppendLine("}");
@@ -263,7 +263,7 @@ namespace CodeProject.Syntax.LALR
             _builder.Append(_parser.Grammar.SymbolNames[_parser.Productions[item.Production].Left]);
             _builder.Append(" ->");
             int nPosition = 0;
-            for (; ; )
+            while (true)
             {
                 if (nPosition == item.Position)
                 {
@@ -295,15 +295,20 @@ namespace CodeProject.Syntax.LALR
         [Conditional(Condition)]
         public void DumpLALRStates()
         {
-            var nStateID = 0;
-            foreach (var lalrState in _parser.LALRStates)
+            for (var nStateID = 0; nStateID < _parser.LALRStates.Count; nStateID++)
             {
-                _builder.AppendLine("State " + nStateID + ":");
-                foreach (var lr1Item in lalrState.Select(nLR1Item => _parser.LR1Items[nLR1Item]))
-                {
-                    DumpLR1Item(lr1Item);
-                }
-                nStateID++;
+                DumpLalrState(nStateID);
+            }
+        }
+
+        [Conditional(Condition)]
+        private void DumpLalrState(int nStateID)
+        {
+            var lalrState = _parser.LALRStates.ElementAt(nStateID);
+            _builder.AppendLine("LALR State " + nStateID + ":");
+            foreach (var lr1Item in lalrState.Select(nLR1Item => _parser.LR1Items[nLR1Item]))
+            {
+                DumpLR1Item(lr1Item);
             }
         }
 
@@ -382,8 +387,12 @@ namespace CodeProject.Syntax.LALR
         [Conditional(Condition)]
         public void DumpParsingState(int state, IEnumerable<Item> tokenStack, Item item, Action action)
         {
-            _builder.AppendFormat("state={0,-3} la={1,-4} {2,-10} {3}", state, item, action,
-                                  string.Join(", ", tokenStack.Select(TokenInfo))).AppendLine();
+            //DumpLalrState(state);
+            //DumpPropogationsForState(state);
+            _builder.AppendFormat("parsing state={0,-3} la={1,-4} {2,-10} {3}",
+                                  state, TokenInfo(item, true), action,
+                                  string.Join(", ", tokenStack.Select(TokenInfo))
+                ).AppendLine().AppendLine();
         }
 
         public string TokenInfo(Item item)
@@ -420,25 +429,30 @@ namespace CodeProject.Syntax.LALR
                             {
                                 info.Append(' ');
                             }
-                            TokenInfo(reduction.Children[i], info);
+                            TokenInfo(reduction.Children[i], info, detailed);
                         }
                         info.Append(']');
                         break;
                     case ContentType.Nested:
                         info.AppendFormat("{0}->[", name);
-                        TokenInfo(item.Nested, info);
+                        TokenInfo(item.Nested, info, detailed);
                         info.Append(']');
                         break;
                 }
             }
             else if (detailed)
             {
-                info.AppendFormat("[{0}] {1} \"{2}\"", item.ID, name, item);
+                info.AppendFormat("[{0}] {1} \"{2}\"", item.ID, name, EscapeWS(item));
             }
             else
             {
-                info.Append(item);
+                info.Append(EscapeWS(item));
             }
+        }
+
+        private static string EscapeWS(Item item)
+        {
+            return item.ToString().Replace("\n", @"\n").Replace("\t", @"\t");
         }
 // ReSharper restore MemberCanBePrivate.Global
     }

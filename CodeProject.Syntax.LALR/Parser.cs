@@ -704,6 +704,7 @@ namespace CodeProject.Syntax.LALR
                         break;
 
                     case ActionType.Error:
+                        token.State = state < 0 ? state : -state;
                         return token;
 
                     case ActionType.ErrorRR:

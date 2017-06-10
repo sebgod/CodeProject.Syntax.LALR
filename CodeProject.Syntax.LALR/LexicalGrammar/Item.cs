@@ -18,6 +18,8 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         private readonly int _id;
         private readonly object _content;
         private readonly ContentType _contentType;
+        private int _state;
+        private bool? _inError;
 
         public int ID { get { return _id; } }
 
@@ -27,7 +29,15 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
 
         public Item Nested { get { return (Item) _content; } }
 
-        public int State { get; set; }
+        public int State
+        {
+            get { return _state; }
+            set
+            {
+                _state = value;
+                _inError = null;
+            }
+        }
 
         public ContentType ContentType { get { return _contentType; } }
 
@@ -61,27 +71,31 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar
         {
             get
             {
+                if (_inError.HasValue)
+                {
+                    return _inError.Value;
+                }
                 if (State < 0)
                 {
                     return true;
                 }
 
-                var isError = false;
+                _inError = false;
                 switch (_contentType)
                 {
                     case ContentType.Nested:
-                        isError = ((Item) _content).IsError;
+                        _inError = ((Item) _content).IsError;
                         break;
 
                     case ContentType.Reduction:
-                        isError = Reduction.Children.Any(p => p.IsError);
+                        _inError = Reduction.Children.Any(p => p.IsError);
                         break;
                 }
-                if (isError)
+                if (_inError == true)
                 {
                     State = -1;
                 }
-                return isError;
+                return _inError.Value;
             }
         }
 
