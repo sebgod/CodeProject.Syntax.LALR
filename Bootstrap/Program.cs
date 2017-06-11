@@ -13,8 +13,8 @@ namespace Bootstrap
 {
     internal static class Program
     {
-        private const string BNF =
-        @"<syntax>         ::= <rule> | <rule>, <syntax>.
+        private const string BNF = @"
+          <syntax>         ::= <rule> | <rule>, <syntax>.
           <rule>           ::= ""<"", <rule-name>, "">"", ""::="",  <expression>, <rule-end>.
           <expression>     ::= <list> | <list>,  ""|"",  <expression>.
           <list>           ::= <term> | <term>, <list> | .
@@ -75,10 +75,10 @@ namespace Bootstrap
             DefineOp,
             DoubleQuote,
             SingleQuote,
-            LeftAngle,
-            RightAngle,
+            RuleLiteralLeft,
+            RuleLiteralRight,
             RuleEnd,
-            Comma,
+            TermSep,
             WS,
             EOL
         }
@@ -104,10 +104,10 @@ namespace Bootstrap
                 {S.OrOp, "|"},
                 {S.DoubleQuote, "\""},
                 {S.SingleQuote, "'"},
-                {S.LeftAngle, "<"},
-                {S.RightAngle, ">"},
-                {S.RuleEnd, ";"},
-                {S.Comma, ","},
+                {S.RuleLiteralLeft, "<"},
+                {S.RuleLiteralRight, ">"},
+                {S.RuleEnd, "."},
+                {S.TermSep, ","},
                 {S.WS, @"\w"},
                 {S.EOL, @"\n"}
             }.ToSymbolTable();
@@ -135,6 +135,17 @@ namespace Bootstrap
                        : new Production((int) lhs);
         }
 
+        private static Production PSL(S lhs, params S[] rhs)
+        {
+            return PL(lhs, p => p, rhs);
+        }
+
+        private static Production PL<T>(S lhs, Func<object, T> convertFunc, params S[] rhs)
+        {
+            Func<int, Item[], object> makeList = (pLHS, pRHS) => MakeList(pLHS, pRHS, convertFunc);
+            return PR(lhs, makeList, rhs);
+        }
+
         private static Production PR(S lhs, Func<int, Item[], object> rewriter, params S[] rhs)
         {
             return rhs != null && rhs.Length > 0
@@ -149,37 +160,37 @@ namespace Bootstrap
                 PG(Derivation.None,
                    P(S.Ast, S.Syntax),
 
-                   P(S.Syntax, S.Rule),
-                   P(S.Syntax, S.Rule, S.Syntax),
+                   PSL(S.Syntax, S.Rule),
+                   PSL(S.Syntax, S.Rule, S.Syntax),
 
-                   P(S.Rule, S.RuleName, S.DefineOp, S.Clauses, S.RuleEnd)
+                   PR(S.Rule, (pLHS, pRHS) => Tuple.Create(pRHS[0].Content, pRHS[2]), S.RuleName, S.DefineOp, S.Clauses, S.RuleEnd)
                 ),
                 PG(Derivation.LeftMost,
-                   P(S.Clauses, S.Terms),
-                   P(S.Clauses, S.Terms, S.OrOp, S.Clauses),
+                   PSL(S.Clauses, S.Terms),
+                   PSL(S.Clauses, S.Terms, S.OrOp, S.Clauses),
 
-                   P(S.Terms, S.Term),
-                   P(S.Terms, S.Term, S.Comma, S.Terms)
+                   PL(S.Terms, MakeMetaTerm, S.Term),
+                   PL(S.Terms, MakeMetaTerm, S.Term, S.TermSep, S.Terms)
                 ),
                 PG(Derivation.None,
                    P(S.Term, S.Literal),
                    P(S.Term, S.RuleName),
-                   P(S.Term)
+                   PR(S.Term, (pLHS, pRHS) => MakeMetaTerm(null))
                 ),
                 PG(Derivation.LeftMost,
-                   P(S.RuleName, S.LeftAngle, S.RuleCharacters, S.RightAngle),
-                   P(S.RuleCharacters, S.RuleCharacter),
-                   P(S.RuleCharacters, S.RuleCharacter, S.RuleCharacters)
+                   PR(S.RuleName, MakeQuotedString, S.RuleLiteralLeft, S.RuleCharacters, S.RuleLiteralRight),
+                   PR(S.RuleCharacters, MakeQuotedString, S.RuleCharacter),
+                   PR(S.RuleCharacters, MakeQuotedString, S.RuleCharacter, S.RuleCharacters)
                 ),
                 PG(Derivation.LeftMost,
-                   P(S.Literal, S.DoubleQuote, S.TextInDoubleQuotes, S.DoubleQuote),
-                   P(S.TextInDoubleQuotes, S.CharacterInDoubleQuotes),
-                   P(S.TextInDoubleQuotes, S.CharacterInDoubleQuotes, S.TextInDoubleQuotes)
+                   PR(S.Literal, MakeQuotedString, S.DoubleQuote, S.TextInDoubleQuotes, S.DoubleQuote),
+                   PR(S.TextInDoubleQuotes, MakeQuotedString, S.CharacterInDoubleQuotes),
+                   PR(S.TextInDoubleQuotes, MakeQuotedString, S.CharacterInDoubleQuotes, S.TextInDoubleQuotes)
                 ),
                 PG(Derivation.LeftMost,
-                   P(S.Literal, S.SingleQuote, S.TextInSingleQuotes, S.SingleQuote),
-                   P(S.TextInSingleQuotes, S.CharacterInSingleQuotes),
-                   P(S.TextInSingleQuotes, S.CharacterInSingleQuotes, S.TextInSingleQuotes)
+                   PR(S.Literal, MakeQuotedString, S.SingleQuote, S.TextInSingleQuotes, S.SingleQuote),
+                   PR(S.TextInSingleQuotes, MakeQuotedString, S.CharacterInSingleQuotes),
+                   PR(S.TextInSingleQuotes, MakeQuotedString, S.CharacterInSingleQuotes, S.TextInSingleQuotes)
                 )
             );
 
@@ -220,10 +231,10 @@ namespace Bootstrap
                                     pair(S.RuleCharacter, "[" + commonSet + "]"),
                                     pair(S.DefineOp, "::="),
                                     pair(S.OrOp, "[|]"),
-                                    pair(S.LeftAngle, "[<]"),
-                                    pair(S.RightAngle, "[>]"),
+                                    pair(S.RuleLiteralLeft, "[<]"),
+                                    pair(S.RuleLiteralRight, "[>]"),
                                     pair(S.RuleEnd, "[.]"),
-                                    pair(S.Comma, "[,]"),
+                                    pair(S.TermSep, "[,]"),
                                     triple(S.EOL, @"[\r]?[\n]", AsyncRegexLexer.Ignore),
                                     triple(S.WS, @"[ \t]", AsyncRegexLexer.Ignore)
                                 }
@@ -232,14 +243,14 @@ namespace Bootstrap
                             doubleQuoteState, new[]
                                 {
                                     triple(S.DoubleQuote, doubleQuoteMarker, AsyncRegexLexer.PopState),
-                                    pair(S.CharacterInDoubleQuotes, "[" + commonSet + symbolSet + "'" + "]"),
+                                    pair(S.CharacterInDoubleQuotes, "[" + commonSet + symbolSet + "'" + "]")
                                 }
                         },
                         {
                             singleQuoteState, new[]
                                 {
                                     triple(S.SingleQuote, singleQuoteMarker, AsyncRegexLexer.PopState),
-                                    pair(S.CharacterInSingleQuotes, "[" + commonSet + symbolSet + "\"" + "]"),
+                                    pair(S.CharacterInSingleQuotes, "[" + commonSet + symbolSet + "\"" + "]")
                                 }
                         }
                     };
@@ -248,7 +259,6 @@ namespace Bootstrap
             using (var regexLexer = new AsyncRegexLexer(charIterator, lexerTable))
             using (var tokenIterator = new AsyncLATokenIterator(regexLexer))
             {
-                debugger.DumpParseTable();
                 result = await parser.ParseInputAsync(tokenIterator, debugger);
             }
             parseTime.Stop();
@@ -258,6 +268,93 @@ namespace Bootstrap
                 string.Format("Accept ({0}): ", timeElapsed),
                 string.Format("Error while parsing ({0}): ", timeElapsed),
                 result);
+        }
+
+        class MetaTerm : Tuple<S?, string>
+        {
+            public static readonly MetaTerm Empty = new MetaTerm();
+
+            private MetaTerm() : base(null, null)
+            {
+                // empty term
+            }
+            public MetaTerm(S name, object content) : base(name, content as string)
+            {
+                // calls base
+            }
+
+            public override string ToString()
+            {
+                return ReferenceEquals(this, Empty) ? "()" : base.ToString();
+            }
+        }
+        class MetaItemList<T> : Tuple<S, LinkedList<T>>
+        {
+            public MetaItemList(S @operator, LinkedList<T> items = null)
+                : base(@operator, items ?? new LinkedList<T>())
+            {
+            }
+
+            public override string ToString()
+            {
+                return string.Format("({0}, {1})", Item1, string.Join(" ", Item2));
+            }
+        }
+
+        private static MetaTerm MakeMetaTerm(object arg)
+        {
+            if (ReferenceEquals(arg, null))
+            {
+                return MetaTerm.Empty;
+            }
+            if (arg is MetaTerm)
+            {
+                return arg as MetaTerm;
+            }
+            var item = arg as Item;
+            if (item != null && item.ContentType == ContentType.Scalar)
+            {
+                return MakeMetaTerm(item.Content);
+            }
+            return null;
+        }
+
+        private static object MakeList<T>(int lhs, Item[] rhs, Func<object, T> convertFunc)
+        {
+            switch (rhs.Length)
+            {
+                case 2:
+                case 3:
+                    var lastIndex = rhs.Length - 1;
+                    var listTuple = rhs[lastIndex].Content as MetaItemList<T>;
+                    var @operator = rhs.Length == 3 ? (S)rhs[1].ID : (S)lhs;
+                    if (listTuple == null)
+                    {
+                        listTuple = new MetaItemList<T>(@operator);
+                        listTuple.Item2.AddFirst(convertFunc(rhs[lastIndex]));
+                    }
+                    listTuple.Item2.AddFirst(convertFunc(rhs[0]));
+                    return listTuple;
+
+                default:
+                    return null;
+            }
+        }
+
+        private static object MakeQuotedString(int lhs, Item[] rhs)
+        {
+            var firstChar = rhs[0].Content as string;
+            switch (rhs.Length)
+            {
+                case 1:
+                    return firstChar;
+                case 2:
+                    return firstChar + rhs[1].Content;
+                case 3:
+                    return new MetaTerm((S)lhs, rhs[1].Content);
+                default:
+                    return null;
+            }
         }
     }
 }

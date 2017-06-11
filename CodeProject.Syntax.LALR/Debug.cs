@@ -1,3 +1,4 @@
+using System.Collections;
 using CodeProject.Syntax.LALR.LexicalGrammar;
 using CodeProject.Syntax.LALR.Utilities;
 using System;
@@ -387,12 +388,10 @@ namespace CodeProject.Syntax.LALR
         [Conditional(Condition)]
         public void DumpParsingState(int state, IEnumerable<Item> tokenStack, Item item, Action action)
         {
-            //DumpLalrState(state);
-            //DumpPropogationsForState(state);
             _builder.AppendFormat("parsing state={0,-3} la={1,-4} {2,-10} {3}",
                                   state, TokenInfo(item, true), action,
                                   string.Join(", ", tokenStack.Select(TokenInfo))
-                ).AppendLine().AppendLine();
+                ).AppendLine();
         }
 
         public string TokenInfo(Item item)
@@ -419,10 +418,16 @@ namespace CodeProject.Syntax.LALR
             {
                 switch (item.ContentType)
                 {
+                    case ContentType.Scalar:
+                        var enumerable = item.Content as IEnumerable<object>;
+                        var stringified = enumerable != null ? string.Join(" ", enumerable) : item.Content.ToString();
+                        info.Append(EscapeString(stringified));
+                        break;
+
                     case ContentType.Reduction:
                         var reduction = item.Reduction;
                         var production = _parser.Productions[reduction.Production];
-                        info.AppendFormat("{0}->{1}[", name, string.Concat(production.Right.Select(GetTokenName)));
+                        info.AppendFormat("{0} -> {1} [", name, string.Concat(production.Right.Select(GetTokenName)));
                         for (var i = 0; i < reduction.Children.Count; i++)
                         {
                             if (i > 0)
@@ -434,7 +439,7 @@ namespace CodeProject.Syntax.LALR
                         info.Append(']');
                         break;
                     case ContentType.Nested:
-                        info.AppendFormat("{0}->[", name);
+                        info.AppendFormat("{0} -> [", name);
                         TokenInfo(item.Nested, info, detailed);
                         info.Append(']');
                         break;
@@ -442,17 +447,28 @@ namespace CodeProject.Syntax.LALR
             }
             else if (detailed)
             {
-                info.AppendFormat("[{0}] {1} \"{2}\"", item.ID, name, EscapeWS(item));
+                info.AppendFormat("[{0}] {1} \"{2}\"", item.ID, name, FormatItem(item));
             }
             else
             {
-                info.Append(EscapeWS(item));
+                info.Append(FormatItem(item));
             }
         }
 
-        private static string EscapeWS(Item item)
+        private static string FormatItem(Item item)
         {
-            return item.ToString().Replace("\n", @"\n").Replace("\t", @"\t");
+            return EscapeString(item.ToString());
+        }
+        private static string EscapeString(string item)
+        {
+            switch (item)
+            {
+                case " ":
+                    return "{ }";
+                case ",":
+                    return "{,}";
+            }
+            return item.Replace("\n", @"\n").Replace("\t", @"\t");
         }
 // ReSharper restore MemberCanBePrivate.Global
     }
