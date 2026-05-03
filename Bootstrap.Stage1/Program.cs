@@ -131,33 +131,33 @@ internal static class Program
     private sealed class BnfVisitor : Bnf.IVisitor
     {
         // Group 0 (None): A -> S has no action.
-        public object SyntaxOne(Item arg0) => MakeList((int)S.Syntax, [arg0], item => item);
-        public object SyntaxCons(Item arg0, Item arg1) => MakeList((int)S.Syntax, [arg0, arg1], item => item);
-        public object Rule(Item arg0, Item arg1, Item arg2, Item arg3) => Tuple.Create(arg0.Content, arg2);
+        public object Visit(Bnf.SyntaxOne node) => MakeList((int)S.Syntax, [node.Arg0], item => item);
+        public object Visit(Bnf.SyntaxCons node) => MakeList((int)S.Syntax, [node.Arg0, node.Arg1], item => item);
+        public object Visit(Bnf.Rule node) => Tuple.Create(node.Arg0.Content, node.Arg2);
 
         // Group 1 (LeftMost): the operator-keyed lists.
-        public object ClausesOne(Item arg0) => MakeList((int)S.Clauses, [arg0], item => item);
-        public object ClausesCons(Item arg0, Item arg1, Item arg2) => MakeList((int)S.Clauses, [arg0, arg1, arg2], item => item);
-        public object TermsOne(Item arg0) => MakeList<MetaTerm>((int)S.Terms, [arg0], MakeMetaTerm);
-        public object TermsCons(Item arg0, Item arg1, Item arg2) => MakeList<MetaTerm>((int)S.Terms, [arg0, arg1, arg2], MakeMetaTerm);
+        public object Visit(Bnf.ClausesOne node) => MakeList((int)S.Clauses, [node.Arg0], item => item);
+        public object Visit(Bnf.ClausesCons node) => MakeList((int)S.Clauses, [node.Arg0, node.Arg1, node.Arg2], item => item);
+        public object Visit(Bnf.TermsOne node) => MakeList<MetaTerm>((int)S.Terms, [node.Arg0], MakeMetaTerm);
+        public object Visit(Bnf.TermsCons node) => MakeList<MetaTerm>((int)S.Terms, [node.Arg0, node.Arg1, node.Arg2], MakeMetaTerm);
 
         // Group 2 (None): T -> V and T -> N have no action; only the epsilon case rewrites.
-        public object TermEpsilon() => MakeMetaTerm(null);
+        public object Visit(Bnf.TermEpsilon node) => MakeMetaTerm(null);
 
         // Group 3 (LeftMost): rule-name and its character list.
-        public object RuleName(Item arg0, Item arg1, Item arg2) => MakeQuotedString((int)S.RuleName, [arg0, arg1, arg2]);
-        public object RuleCharOne(Item arg0) => MakeQuotedString((int)S.RuleCharacters, [arg0]);
-        public object RuleCharCons(Item arg0, Item arg1) => MakeQuotedString((int)S.RuleCharacters, [arg0, arg1]);
+        public object Visit(Bnf.RuleName node) => MakeQuotedString((int)S.RuleName, [node.Arg0, node.Arg1, node.Arg2]);
+        public object Visit(Bnf.RuleCharOne node) => MakeQuotedString((int)S.RuleCharacters, [node.Arg0]);
+        public object Visit(Bnf.RuleCharCons node) => MakeQuotedString((int)S.RuleCharacters, [node.Arg0, node.Arg1]);
 
         // Group 4 (LeftMost): "double-quoted" literal and its inner text.
-        public object LiteralDouble(Item arg0, Item arg1, Item arg2) => MakeQuotedString((int)S.Literal, [arg0, arg1, arg2]);
-        public object TextDoubleOne(Item arg0) => MakeQuotedString((int)S.TextInDoubleQuotes, [arg0]);
-        public object TextDoubleCons(Item arg0, Item arg1) => MakeQuotedString((int)S.TextInDoubleQuotes, [arg0, arg1]);
+        public object Visit(Bnf.LiteralDouble node) => MakeQuotedString((int)S.Literal, [node.Arg0, node.Arg1, node.Arg2]);
+        public object Visit(Bnf.TextDoubleOne node) => MakeQuotedString((int)S.TextInDoubleQuotes, [node.Arg0]);
+        public object Visit(Bnf.TextDoubleCons node) => MakeQuotedString((int)S.TextInDoubleQuotes, [node.Arg0, node.Arg1]);
 
         // Group 5 (LeftMost): 'single-quoted' literal and its inner text.
-        public object LiteralSingle(Item arg0, Item arg1, Item arg2) => MakeQuotedString((int)S.Literal, [arg0, arg1, arg2]);
-        public object TextSingleOne(Item arg0) => MakeQuotedString((int)S.TextInSingleQuotes, [arg0]);
-        public object TextSingleCons(Item arg0, Item arg1) => MakeQuotedString((int)S.TextInSingleQuotes, [arg0, arg1]);
+        public object Visit(Bnf.LiteralSingle node) => MakeQuotedString((int)S.Literal, [node.Arg0, node.Arg1, node.Arg2]);
+        public object Visit(Bnf.TextSingleOne node) => MakeQuotedString((int)S.TextInSingleQuotes, [node.Arg0]);
+        public object Visit(Bnf.TextSingleCons node) => MakeQuotedString((int)S.TextInSingleQuotes, [node.Arg0, node.Arg1]);
     }
 
     private sealed class MetaTerm : Tuple<S?, string>

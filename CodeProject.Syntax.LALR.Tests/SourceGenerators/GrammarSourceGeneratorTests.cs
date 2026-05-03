@@ -302,16 +302,18 @@ public class GrammarSourceGeneratorTests
         Assert.Contains("namespace MyApp;", visitorSource);
         Assert.Contains("public static partial class Arithmetic", visitorSource);
 
-        // Interface methods: PascalCased action name, Item args, returns object.
-        Assert.Contains("object MakeNum(Item arg0);", visitorSource);
-        Assert.Contains("object MakeAdd(Item arg0, Item arg1, Item arg2);", visitorSource);
+        // Interface methods: one Visit overload per AST record. Same record names
+        // the AST emitter writes into <ClassName>.Ast.g.cs; the visitor receives
+        // the typed record and returns object.
+        Assert.Contains("object Visit(MakeNum node);", visitorSource);
+        Assert.Contains("object Visit(MakeAdd node);", visitorSource);
 
         // BuildActions wiring: dictionary keys are the original camelCase action
-        // names (what SchemaCompiler looks up), method calls dispatch to the
-        // visitor with positional args[i].
+        // names (what SchemaCompiler looks up); each entry constructs the record
+        // from the parser's args and dispatches to the matching Visit overload.
         Assert.Contains("BuildActions(IVisitor visitor)", visitorSource);
-        Assert.Contains("[\"makeNum\"] = (lhs, args) => visitor.MakeNum(args[0]),", visitorSource);
-        Assert.Contains("[\"makeAdd\"] = (lhs, args) => visitor.MakeAdd(args[0], args[1], args[2]),", visitorSource);
+        Assert.Contains("[\"makeNum\"] = (lhs, args) => visitor.Visit(new MakeNum(args[0])),", visitorSource);
+        Assert.Contains("[\"makeAdd\"] = (lhs, args) => visitor.Visit(new MakeAdd(args[0], args[1], args[2])),", visitorSource);
     }
 
     [Fact]
@@ -337,8 +339,8 @@ public class GrammarSourceGeneratorTests
             public sealed class StubVisitor : Arithmetic.IVisitor
             {
                 public List<string> Calls { get; } = new();
-                public object MakeNum(Item arg0) { Calls.Add("makeNum:" + arg0.Content); return arg0; }
-                public object MakeAdd(Item arg0, Item arg1, Item arg2) { Calls.Add("makeAdd"); return arg0; }
+                public object Visit(Arithmetic.MakeNum node) { Calls.Add("makeNum:" + node.Arg0.Content); return node.Arg0; }
+                public object Visit(Arithmetic.MakeAdd node) { Calls.Add("makeAdd"); return node.Arg0; }
             }
             """;
 
