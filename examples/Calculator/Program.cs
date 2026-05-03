@@ -43,12 +43,15 @@ internal static class Program
     /// the YAML grammar — adding a production with an action automatically
     /// extends the surface.
     /// </summary>
-    private sealed class Calc : Grammar.IVisitor
+    private sealed class Calc : Grammar.IVisitor<int>
     {
-        public object Visit(Grammar.Number node) =>
+        // Generic IVisitor<T> means this evaluator can return int directly
+        // instead of object — no boxing in the visitor signature, no cast at
+        // the call site of any code that holds onto a typed reference.
+        public int Visit(Grammar.Number node) =>
             int.Parse((string)node.Arg0.Content, CultureInfo.InvariantCulture);
 
-        public object Visit(Grammar.Add node) =>
+        public int Visit(Grammar.Add node) =>
             (int)node.Arg0.Content + (int)node.Arg2.Content;
     }
 }

@@ -128,7 +128,7 @@ internal static class Program
     /// <see cref="MakeMetaTerm"/>) — the helpers themselves are unchanged, only
     /// the wiring from grammar shape to action invocation differs.
     /// </summary>
-    private sealed class BnfVisitor : Bnf.IVisitor
+    private sealed class BnfVisitor : Bnf.IVisitor<object>
     {
         // Group 0 (None): A -> S has no action.
         public object Visit(Bnf.SyntaxOne node) => MakeList((int)S.Syntax, [node.Arg0], item => item);

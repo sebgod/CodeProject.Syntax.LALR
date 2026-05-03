@@ -113,7 +113,7 @@ internal static class Program
     /// passthrough <c>valueObject</c> / <c>valueArray</c> branches forward the
     /// child's already-built result.
     /// </summary>
-    private sealed class JsonVisitor : Json.IVisitor
+    private sealed class JsonVisitor : Json.IVisitor<object>
     {
         // V branches — return whatever the inner production already built.
         public object Visit(Json.ValueObject node) => node.Arg0.Content;

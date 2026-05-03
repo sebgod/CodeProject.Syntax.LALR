@@ -59,10 +59,10 @@ using CodeProject.Syntax.LALR;
 using CodeProject.Syntax.LALR.LexicalGrammar;
 using CodeProject.Syntax.LALR.Schema;
 
-class Calc : Grammar.IVisitor
+class Calc : Grammar.IVisitor<int>
 {
-    public object Visit(Grammar.Number node) => int.Parse((string)node.Arg0.Content);
-    public object Visit(Grammar.Add node)    => (int)node.Arg0.Content + (int)node.Arg2.Content;
+    public int Visit(Grammar.Number node) => int.Parse((string)node.Arg0.Content);
+    public int Visit(Grammar.Add node)    => (int)node.Arg0.Content + (int)node.Arg2.Content;
 }
 
 var (g, lex) = SchemaCompiler.Compile(Grammar.Schema, Grammar.BuildActions(new Calc()));
@@ -291,7 +291,7 @@ in your csproj, and the source generator emits three companion files:
 |---|---|
 | `<Name>.g.cs` | `public static partial class <Name> { public static GrammarSchema Schema { get; } = new() { … }; }` |
 | `<Name>.Ast.g.cs` | One `public sealed record <Action>(Item Arg0, …)` per distinct `action:` name in the YAML. |
-| `<Name>.Visitor.g.cs` | A nested `public interface IVisitor` with one `Visit(<Record>)` overload per record, plus `public static IReadOnlyDictionary<string, Func<int, Item[], object>> BuildActions(IVisitor visitor)` that constructs records from the parser's reduction frame and dispatches by C# overload resolution. |
+| `<Name>.Visitor.g.cs` | A nested `public interface IVisitor<out T>` with one `T Visit(<Record>)` overload per record, plus `public static IReadOnlyDictionary<string, Func<int, Item[], object>> BuildActions<T>(IVisitor<T> visitor)` that constructs records from the parser's reduction frame and dispatches by C# overload resolution. Use `IVisitor<int>` for an evaluator, `IVisitor<object>` when methods need different shapes per production. |
 
 Your code implements `IVisitor`, calls `Schema/SchemaCompiler.Compile(Schema, BuildActions(visitor))`,
 and feeds the result to a `Parser`. See the Quick start above and `examples/Json/`

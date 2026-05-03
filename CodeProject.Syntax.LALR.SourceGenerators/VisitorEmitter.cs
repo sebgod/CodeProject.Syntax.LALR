@@ -106,17 +106,20 @@ internal static class VisitorEmitter
     {
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// Semantic-action surface. One <c>Visit</c> overload per record emitted by the");
-        sb.AppendLine("    /// AST emitter (one record per distinct production action). Implementations are");
-        sb.AppendLine("    /// wired into the parser via <see cref=\"BuildActions\"/>, which constructs the");
-        sb.AppendLine("    /// matching record from the parser's reduction frame and dispatches by C# overload");
-        sb.AppendLine("    /// resolution — types flow naturally from the YAML grammar to the visitor.");
+        sb.AppendLine("    /// AST emitter (one record per distinct production action). The type parameter");
+        sb.AppendLine("    /// <typeparamref name=\"T\"/> is the visitor's return type — when every method");
+        sb.AppendLine("    /// returns the same shape (e.g. <c>int</c> for an evaluator) the visitor signature");
+        sb.AppendLine("    /// stays honest; pass <c>IVisitor&lt;object&gt;</c> if methods need to return");
+        sb.AppendLine("    /// different shapes per production. Implementations are wired into the parser via");
+        sb.AppendLine("    /// <see cref=\"BuildActions\"/>, which constructs the matching record from the");
+        sb.AppendLine("    /// parser's reduction frame and dispatches by C# overload resolution.");
         sb.AppendLine("    /// </summary>");
-        sb.AppendLine("    public interface IVisitor");
+        sb.AppendLine("    public interface IVisitor<out T>");
         sb.AppendLine("    {");
         for (var i = 0; i < actions.Count; i++)
         {
             var a = actions[i];
-            sb.Append("        object Visit(").Append(a.MethodName).AppendLine(" node);");
+            sb.Append("        T Visit(").Append(a.MethodName).AppendLine(" node);");
         }
         sb.AppendLine("    }");
     }
@@ -124,13 +127,14 @@ internal static class VisitorEmitter
     private static void EmitBuildActions(StringBuilder sb, List<ActionInfo> actions)
     {
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine("    /// Adapt a typed <see cref=\"IVisitor\"/> implementation into the action dictionary");
-        sb.AppendLine("    /// that <c>CodeProject.Syntax.LALR.Schema.SchemaCompiler.Compile(schema, actions)</c>");
+        sb.AppendLine("    /// Adapt a typed <see cref=\"IVisitor{T}\"/> implementation into the action");
+        sb.AppendLine("    /// dictionary that <c>CodeProject.Syntax.LALR.Schema.SchemaCompiler.Compile(schema, actions)</c>");
         sb.AppendLine("    /// consumes. Each entry constructs the AST record for that production from the");
         sb.AppendLine("    /// parser's <c>Item[]</c> reduction frame, then dispatches to the matching");
-        sb.AppendLine("    /// <c>Visit</c> overload on the visitor.");
+        sb.AppendLine("    /// <c>Visit</c> overload on the visitor; the visitor's typed return is boxed to");
+        sb.AppendLine("    /// <c>object</c> for storage on <c>Item.Content</c> and unboxed by the consumer.");
         sb.AppendLine("    /// </summary>");
-        sb.AppendLine("    public static IReadOnlyDictionary<string, Func<int, Item[], object>> BuildActions(IVisitor visitor)");
+        sb.AppendLine("    public static IReadOnlyDictionary<string, Func<int, Item[], object>> BuildActions<T>(IVisitor<T> visitor)");
         sb.AppendLine("    {");
         sb.AppendLine("        ArgumentNullException.ThrowIfNull(visitor);");
         sb.AppendLine("        return new Dictionary<string, Func<int, Item[], object>>(StringComparer.Ordinal)");

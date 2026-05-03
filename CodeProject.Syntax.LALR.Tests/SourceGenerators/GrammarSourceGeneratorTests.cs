@@ -302,16 +302,17 @@ public class GrammarSourceGeneratorTests
         Assert.Contains("namespace MyApp;", visitorSource);
         Assert.Contains("public static partial class Arithmetic", visitorSource);
 
-        // Interface methods: one Visit overload per AST record. Same record names
-        // the AST emitter writes into <ClassName>.Ast.g.cs; the visitor receives
-        // the typed record and returns object.
-        Assert.Contains("object Visit(MakeNum node);", visitorSource);
-        Assert.Contains("object Visit(MakeAdd node);", visitorSource);
+        // Interface methods: one Visit overload per AST record, returning the
+        // visitor's generic T so consumers can pick a typed return (e.g. int
+        // for an evaluator) instead of always boxing through object.
+        Assert.Contains("public interface IVisitor<out T>", visitorSource);
+        Assert.Contains("T Visit(MakeNum node);", visitorSource);
+        Assert.Contains("T Visit(MakeAdd node);", visitorSource);
 
         // BuildActions wiring: dictionary keys are the original camelCase action
         // names (what SchemaCompiler looks up); each entry constructs the record
         // from the parser's args and dispatches to the matching Visit overload.
-        Assert.Contains("BuildActions(IVisitor visitor)", visitorSource);
+        Assert.Contains("BuildActions<T>(IVisitor<T> visitor)", visitorSource);
         Assert.Contains("[\"makeNum\"] = (lhs, args) => visitor.Visit(new MakeNum(args[0])),", visitorSource);
         Assert.Contains("[\"makeAdd\"] = (lhs, args) => visitor.Visit(new MakeAdd(args[0], args[1], args[2])),", visitorSource);
     }
@@ -336,7 +337,7 @@ public class GrammarSourceGeneratorTests
 
             namespace GenVisit;
 
-            public sealed class StubVisitor : Arithmetic.IVisitor
+            public sealed class StubVisitor : Arithmetic.IVisitor<object>
             {
                 public List<string> Calls { get; } = new();
                 public object Visit(Arithmetic.MakeNum node) { Calls.Add("makeNum:" + node.Arg0.Content); return node.Arg0; }
@@ -379,14 +380,17 @@ public class GrammarSourceGeneratorTests
 
         var arithmeticType = asm.GetType("GenVisit.Arithmetic")!;
         var stubType = asm.GetType("GenVisit.StubVisitor")!;
-        var visitorInterface = arithmeticType.GetNestedType("IVisitor")!;
 
         var stub = Activator.CreateInstance(stubType)!;
         var schema = (GrammarSchema)arithmeticType.GetProperty("Schema")!.GetValue(null)!;
 
-        // BuildActions returns IReadOnlyDictionary<string, Func<int, Item[], object>>;
-        // SchemaCompiler.Compile asks for the same shape.
-        var buildActions = arithmeticType.GetMethod("BuildActions", new[] { visitorInterface })!;
+        // BuildActions is now generic — IVisitor is `IVisitor<out T>` and the
+        // method is `BuildActions<T>(IVisitor<T>)`. Find the open generic by
+        // name (only one BuildActions, no ambiguity), close it with T=object
+        // for this stub, then dispatch.
+        var buildActionsOpen = arithmeticType.GetMethods()
+            .Single(m => m.Name == "BuildActions" && m.IsGenericMethodDefinition);
+        var buildActions = buildActionsOpen.MakeGenericMethod(typeof(object));
         var actions = (IReadOnlyDictionary<string, Func<int, Item[], object>>)buildActions.Invoke(null, new[] { stub })!;
 
         var (grammar, lexerTable) = SchemaCompiler.Compile(schema, actions);
