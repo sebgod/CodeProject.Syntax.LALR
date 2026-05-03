@@ -29,6 +29,17 @@ public readonly struct Production
         _rewriter = rewriter;
     }
 
+    /// <summary>
+    /// True when this production carries a semantic-action rewriter. The parser
+    /// uses this to distinguish "rewriter present but returned null" (a valid
+    /// content value — e.g. a JSON visitor returning C# null for JSON's null
+    /// literal) from "no rewriter present at all" (parser falls back to building
+    /// a default <see cref="Reduction"/>). Don't replace this with a null check
+    /// on <see cref="Rewrite"/>'s return value — that's exactly the conflation
+    /// this property exists to avoid.
+    /// </summary>
+    public bool HasRewriter => _rewriter != null;
+
     public object Rewrite(Item[] children)
     {
         return _rewriter?.Invoke(Left, children);

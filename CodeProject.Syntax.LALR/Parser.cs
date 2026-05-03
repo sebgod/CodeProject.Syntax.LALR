@@ -679,7 +679,7 @@ public class Parser
     /// <param name="errorMode">How to surface parse errors: throw <see cref="ParseErrorException"/> (default) or return the offending Item.</param>
     /// <param name="cancellationToken">Cancels the parse loop between iterations.</param>
     /// <returns>The reduced program tree on acceptance, or — when <paramref name="errorMode"/> is <see cref="ParserErrorMode.Return"/> — the erroneous Item.</returns>
-    public async Task<Item> ParseInputAsync(IAsyncLAIterator<Item> tokenIterator, Debug debugger,
+    public async Task<Item> ParseInputAsync(IAsyncLAIterator<Item> tokenIterator, Debug debugger = null,
         bool trimReductions = true,
         bool allowRewriting = true,
         ParserErrorMode errorMode = ParserErrorMode.Throw,
@@ -694,7 +694,10 @@ public class Parser
             cancellationToken.ThrowIfCancellationRequested();
             var token = await tokenIterator.LookAheadAsync();
             var action = ParseTable.Actions[state, token.ID + 1];
-            debugger.DumpParsingState(state, tokenStack, token, action);
+            // debugger may be null (caller wants no trace); the methods are
+            // [Conditional("DEBUG")] so the call vanishes in Release regardless,
+            // but in Debug builds we'd dereference null without this guard.
+            debugger?.DumpParsingState(state, tokenStack, token, action);
 
             switch (action.ActionType)
             {
@@ -722,8 +725,14 @@ public class Parser
                         {
                             children[nChildren - i - 1] = tokenStack.Pop();
                         }
-                        var rewrite = (allowRewriting ? production.Rewrite(children) : null) ??
-                                      new Reduction(nProduction, children);
+                        // Distinguish "rewriter present, returned null" (keep the null —
+                        // it's the legitimate content the visitor produced) from "no
+                        // rewriter at all" (fall back to the default Reduction). Driving
+                        // this off Production.HasRewriter avoids the old `?? new Reduction`
+                        // conflation that ate a JSON visitor's null literal returns.
+                        object rewrite = allowRewriting && production.HasRewriter
+                            ? production.Rewrite(children)
+                            : new Reduction(nProduction, children);
                         // empty reductions (epsilon) take the lookahead position so the
                         // emitted item still has a meaningful place in the source.
                         var pos = nChildren > 0 ? children[0].Position : token.Position;
@@ -759,7 +768,7 @@ public class Parser
                 case ActionType.ErrorSR:
                     throw new InvalidOperationException("Shift-Reduce conflict in grammar: " + token);
             }
-            debugger.Flush();
+            debugger?.Flush();
         }
     }
 

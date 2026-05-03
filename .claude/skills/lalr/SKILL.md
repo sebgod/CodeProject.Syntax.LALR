@@ -23,7 +23,7 @@ LALR(1) parser-table generator + runtime in C# (.NET 10 / AOT). Modernised in 20
 | Typed AST (3a) | ✅ | `AstEmitter` writes `<ClassName>.Ast.g.cs` — `public sealed record <Action>(Item Arg0, …)` per distinct action. Arity conflicts surface as `LALR0002`. |
 | Visitor + wiring (3b) | ✅ | `VisitorEmitter` writes `<ClassName>.Visitor.g.cs` — nested `IVisitor` with one `Visit(<Record>)` overload per action. `BuildActions(IVisitor)` constructs the record from the parser's reduction frame and dispatches by C# overload resolution. |
 | Self-host (4) | ✅ | `Bootstrap.Stage1/` consumes `bnf.lalr.yaml` end-to-end. `Bootstrap/` (stage0) keeps the inline grammar as the no-generator-no-YAML reference; both produce byte-identical Accept output. |
-| JSON example | ✅ | `examples/Json/` parses real JSON with a 50-line visitor that builds `Dictionary<string,object>` / `List<object>` / primitives. Demonstrates the pipeline on a grammar nobody designed for this parser; surfaces two parser-loop quirks documented in Outstanding (the `trimReductions` bypass and the null-as-rewriter-result conflation). |
+| JSON example | ✅ | `examples/Json/` parses real JSON with a 50-line visitor that builds `Dictionary<string,object>` / `List<object>` / primitives. Demonstrates the pipeline on a grammar nobody designed for this parser. |
 
 ## Canonical re-verification (run before any commit)
 
@@ -54,13 +54,10 @@ No output ⇒ they match.
 Pick from here when the user asks "what's next?":
 
 1. **Generator-time grammar validation.** Conflicts and unknown-symbol refs surface at runtime today. Linking `SchemaCompiler` source into the generator (same trick as `GrammarSchema.cs` and `Derivation.cs`) lets the generator run `Compile` at build time and emit `LALR0003` / `LALR0004` Roslyn diagnostics with file/line locators. Note: `SchemaCompiler` transitively pulls in `LexicalGrammar/` (LexRule, IRx + impls, IRxParser) — that's a substantial source-link surface, not a one-file shot.
-2. **Parser quirks surfaced by the JSON example.** Two issues worth tightening:
-   - `production.Rewrite(children) ?? new Reduction(...)` (Parser.cs ~725) conflates "rewriter returned null" with "no rewriter". Visitors that legitimately want to return null (e.g. JSON's `null`) hit this — the JSON example works around it with a `JsonNull` sentinel. Real fix: a separate flag for "no rewriter present".
-   - `ParseInputAsync` dereferences `debugger` directly on every loop iteration (line 697); null debugger is an NRE. Either default to a no-op debugger or null-check.
-3. **Source-generator NuGet packaging.** Consumer csprojs need a `<Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />` workaround so Roslyn's analyzer host can resolve the generator's YamlDotNet dependency. Real packaging puts YamlDotNet inside the analyzer's `analyzers/dotnet/cs/` folder; ship the generator as a NuGet.
-4. **Generic typed visitor return.** `IVisitor.Visit(…)` returns `object`. A `T` generic on the visitor / `BuildActions<T>` would remove the cast at the call site. More codegen work; only do it once a user complains.
-5. **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based today (documented). Add an optional decoder for codepoint columns if a user asks for diagnostics-quality positions.
-6. **More example grammars.** TOML config, C declaration syntax (the famous "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each ships under `examples/`.
+2. **Source-generator NuGet packaging.** Consumer csprojs need a `<Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />` workaround so Roslyn's analyzer host can resolve the generator's YamlDotNet dependency. Real packaging puts YamlDotNet inside the analyzer's `analyzers/dotnet/cs/` folder; ship the generator as a NuGet.
+3. **Generic typed visitor return.** `IVisitor.Visit(…)` returns `object`. A `T` generic on the visitor / `BuildActions<T>` would remove the cast at the call site. More codegen work; only do it once a user complains.
+4. **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based today (documented). Add an optional decoder for codepoint columns if a user asks for diagnostics-quality positions.
+5. **More example grammars.** TOML config, C declaration syntax (the famous "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each ships under `examples/`.
 
 ## Importers — explicitly *not* on the roadmap
 

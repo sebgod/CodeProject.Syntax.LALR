@@ -48,14 +48,13 @@ internal static class Program
         // delegates and the trace methods become no-ops. (The parser dereferences
         // debugger directly on every loop iteration; fixing that is a runtime-
         // library tweak we'd do separately.)
-        var silentDebug = new Debug(parser, null, null);
         // trimReductions:false so every reduction fires its visitor — otherwise
         // arity-1 single-non-terminal productions (E -> V, M -> P, V -> O, V -> A)
         // get folded by the parser before the rewriter runs and the visitor's
         // ElementsOne / MembersOne / ValueObject / ValueArray methods would never
         // be called. With trim off, every cons case can rely on its tail already
         // being a List rather than handling scalar-vs-list ambiguity per-call.
-        var result = await parser.ParseInputAsync(tokens, silentDebug, trimReductions: false);
+        var result = await parser.ParseInputAsync(tokens, debugger: null, trimReductions: false);
         if (result.IsError)
         {
             Console.Error.WriteLine($"parse failed: {result}");
@@ -73,11 +72,6 @@ internal static class Program
     private static void Print(object value, int indent)
     {
         var pad = new string(' ', indent);
-        if (ReferenceEquals(value, JsonNull))
-        {
-            Console.WriteLine($"{pad}null");
-            return;
-        }
         switch (value)
         {
             case null:
@@ -119,15 +113,6 @@ internal static class Program
     /// passthrough <c>valueObject</c> / <c>valueArray</c> branches forward the
     /// child's already-built result.
     /// </summary>
-    /// <summary>
-    /// Sentinel for JSON <c>null</c>. We can't return literal C# <c>null</c> from a
-    /// visitor method because the parser's <c>production.Rewrite(children) ?? new
-    /// Reduction(...)</c> treats null as "no rewriter result" and substitutes the
-    /// default reduction — losing the null value entirely. Carry the sentinel
-    /// through the tree and convert it back at print time.
-    /// </summary>
-    public static readonly object JsonNull = new();
-
     private sealed class JsonVisitor : Json.IVisitor
     {
         // V branches — return whatever the inner production already built.
@@ -137,7 +122,7 @@ internal static class Program
         public object Visit(Json.ValueNumber node) => double.Parse((string)node.Arg0.Content, CultureInfo.InvariantCulture);
         public object Visit(Json.ValueTrue node) => true;
         public object Visit(Json.ValueFalse node) => false;
-        public object Visit(Json.ValueNull node) => JsonNull;
+        public object Visit(Json.ValueNull node) => null;
 
         // Object/array containers.
         public object Visit(Json.EmptyObject node) => new Dictionary<string, object>(0);
