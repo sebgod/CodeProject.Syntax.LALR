@@ -1,0 +1,117 @@
+name: dotnet
+
+# CI/CD for CodeProject.Syntax.LALR.
+#
+# Triggers:
+#   - push to master       → restore/build/test, pack, upload nupkg+snupkg as
+#                            artifact (no publish)
+#   - push to tag "v*"     → same as master, plus publish to NuGet using
+#                            NUGET_SECRET (NUGET_SECRET is the repo-level secret
+#                            with NuGet.org push permissions)
+#   - pull_request → master → restore/build/test only (no pack, no publish)
+#
+# Conventions:
+#   - We pack from the runtime project only; it bundles the source generator +
+#     YamlDotNet in analyzers/dotnet/cs/ inside the nupkg.
+#   - GITHUB_ACTIONS=true switches Directory.Build.props to deterministic-path
+#     mode (ContinuousIntegrationBuild=true), so packages are bit-reproducible
+#     given the same source.
+#   - The runtime <Version> drives the package version. Tag should match the
+#     csproj Version (e.g. v2.0.0 ↔ <Version>2.0.0</Version>); a guard step
+#     fails the publish job if they diverge.
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so SourceLink can resolve commits and pdb metadata.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore CodeProject.Syntax.LALR.sln
+
+      - name: Build (Release)
+        run: dotnet build CodeProject.Syntax.LALR.sln -c Release --no-restore --nologo
+
+      - name: Test
+        run: dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Release --no-build --nologo
+
+      # Stage parity check — stage0 (inline grammar) and stage1 (YAML pipeline)
+      # must produce byte-identical Accept output. If they diverge, something
+      # in the YAML/schema/generator stack regressed and stage0 is the truth.
+      - name: Stage0 vs Stage1 Accept parity
+        run: |
+          diff \
+            <(dotnet run --project Bootstrap/Bootstrap.csproj --no-build -c Release \
+                | grep -oE '^Accept.*' | sed 's/^Accept ([^)]*): /Accept: /') \
+            <(dotnet run --project Bootstrap.Stage1/Bootstrap.Stage1.csproj --no-build -c Release \
+                | grep -oE '^Accept.*' | sed 's/^Accept ([^)]*): /Accept: /')
+
+      - name: Pack
+        if: github.event_name == 'push'
+        run: dotnet pack CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj -c Release --no-build --nologo -o packages
+
+      - name: Upload package artifacts
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: |
+            packages/*.nupkg
+            packages/*.snupkg
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    # Only publish on tag push. Master pushes upload artifacts but don't
+    # publish — gives us an audit trail of "what would have shipped" without
+    # spamming NuGet.org with every commit.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches csproj Version
+        # Belt and braces: catches a tag pushed without bumping <Version> in the
+        # csproj. The package would still build but ship under the old version,
+        # which is confusing for consumers.
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          csproj_version=$(grep -oP '<Version>\K[^<]+' CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj)
+          if [ "$tag" != "$csproj_version" ]; then
+            echo "::error::Tag v$tag does not match csproj <Version>$csproj_version</Version>"
+            exit 1
+          fi
+          echo "Tag and csproj version both at $tag — OK"
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: packages
+
+      - name: Push to NuGet
+        # --skip-duplicate makes re-runs of the same tag idempotent. The .snupkg
+        # alongside is auto-routed to symbols.nuget.org by NuGet.org. Pushing
+        # the *.nupkg glob picks both up.
+        run: >
+          dotnet nuget push "packages/*.nupkg"
+          --api-key "${{ secrets.NUGET_SECRET }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

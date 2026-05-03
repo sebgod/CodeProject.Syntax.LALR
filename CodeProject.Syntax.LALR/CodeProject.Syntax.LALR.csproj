@@ -5,11 +5,75 @@
     <RootNamespace>CodeProject.Syntax.LALR</RootNamespace>
     <AssemblyName>CodeProject.Syntax.LALR</AssemblyName>
     <AssemblyTitle>CodeProject.Syntax.LALR</AssemblyTitle>
-    <Description>LALR Parse Table Generation in C#</Description>
     <IsAotCompatible>true</IsAotCompatible>
     <IsTrimmable>true</IsTrimmable>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <Version>2.0.0</Version>
   </PropertyGroup>
+
+  <!-- NuGet package metadata. Most of the boilerplate (Authors, Copyright,
+       PackageProjectUrl, RepositoryUrl, license/readme references, symbol
+       package format, embed-untracked-sources) lives in Directory.Build.props
+       and is shared with any future packable project. Per-package fields
+       (PackageId, Description, tags, release notes) are local. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>CodeProject.Syntax.LALR</PackageId>
+    <Description>LALR(1) parser-table generator and runtime in C#. Includes a YAML grammar source generator that emits a typed AST + visitor surface from `*.lalr.yaml` files at build time.</Description>
+    <PackageTags>lalr;parser;parser-generator;lexer;yaml;source-generator;roslyn</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- README + license shipped inside the .nupkg (referenced by
+         PackageReadmeFile / PackageLicenseFile in Directory.Build.props). -->
+    <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\LICENSE.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Source-link: PDBs carry GitHub URLs for source mapping, so debuggers
+         can step into library code without symbols on disk. Build-time only;
+         doesn't flow to consumers. -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.203" PrivateAssets="All" />
+
+    <!-- YamlDotNet — used by the source generator at build time. Pulled here
+         (not in the generator project) so $(PkgYamlDotNet) is available to the
+         analyzer-pack target below. PrivateAssets="all" keeps it out of
+         consumers' compile/runtime closure; the analyzer DLL gets shipped
+         inside the package's analyzers/ folder instead. -->
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Generator project as an analyzer dep. ReferenceOutputAssembly=false so
+         the runtime DLL doesn't gain a dependency on the generator's assembly;
+         OutputItemType=Analyzer wires it into the analyzer host for the runtime
+         project's own compilation (harmless — the generator only fires on
+         *.lalr.yaml AdditionalFiles, of which the runtime has none). The
+         analyzer DLL itself is then included in the nupkg via the target below. -->
+    <ProjectReference Include="..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Pack the source generator's DLL plus its YamlDotNet build-time dep into
+       analyzers/dotnet/cs/ inside the nupkg. Roslyn's analyzer host probes the
+       analyzer's directory for dependencies, so YamlDotNet must sit alongside
+       the generator. Consumers then need only `<PackageReference Include="…" />`
+       — no extra `<Analyzer Include="$(PkgYamlDotNet)…">` workaround.
+       The ProjectReference above ensures the generator's DLL exists before pack
+       runs; YamlDotNet is restored via its PackageReference so $(PkgYamlDotNet)
+       resolves to the package root. -->
+  <ItemGroup>
+    <None Include="..\CodeProject.Syntax.LALR.SourceGenerators\bin\$(Configuration)\netstandard2.0\CodeProject.Syntax.LALR.SourceGenerators.dll"
+          Pack="true"
+          PackagePath="analyzers\dotnet\cs"
+          Visible="false" />
+    <None Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll"
+          Pack="true"
+          PackagePath="analyzers\dotnet\cs"
+          Visible="false" />
+  </ItemGroup>
 
 </Project>

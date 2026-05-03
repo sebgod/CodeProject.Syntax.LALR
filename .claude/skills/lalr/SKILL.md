@@ -24,6 +24,7 @@ LALR(1) parser-table generator + runtime in C# (.NET 10 / AOT). Modernised in 20
 | Visitor + wiring (3b) | ✅ | `VisitorEmitter` writes `<ClassName>.Visitor.g.cs` — nested `IVisitor` with one `Visit(<Record>)` overload per action. `BuildActions(IVisitor)` constructs the record from the parser's reduction frame and dispatches by C# overload resolution. |
 | Self-host (4) | ✅ | `Bootstrap.Stage1/` consumes `bnf.lalr.yaml` end-to-end. `Bootstrap/` (stage0) keeps the inline grammar as the no-generator-no-YAML reference; both produce byte-identical Accept output. |
 | JSON example | ✅ | `examples/Json/` parses real JSON with a 50-line visitor that builds `Dictionary<string,object>` / `List<object>` / primitives. Demonstrates the pipeline on a grammar nobody designed for this parser. |
+| NuGet packaging + CI | ✅ | Runtime project packs `CodeProject.Syntax.LALR.{nupkg,snupkg}` with the source generator + YamlDotNet bundled in `analyzers/dotnet/cs/` (so PackageReference consumers don't need the analyzer-DLL workaround). Deterministic + SourceLink + symbols. `.github/workflows/dotnet.yml` builds + tests + stage-parity-checks on push, packs + uploads artifact on master, publishes to NuGet on `v*` tag using `NUGET_SECRET`. |
 
 ## Canonical re-verification (run before any commit)
 
@@ -36,7 +37,10 @@ dotnet run   --project TestProject/TestProject.csproj         -c Release --no-bu
 dotnet run   --project examples/Json/Examples.Json.csproj     -c Release --no-build      # prints parsed JSON tree
 dotnet publish Bootstrap/Bootstrap.csproj -c Release                                     # AOT clean
 dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj -c Release                       # AOT clean
+dotnet pack CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj -c Release -o packages  # nupkg + snupkg
 ```
+
+To cut a release: bump `<Version>` in `CodeProject.Syntax.LALR.csproj`, commit, tag `vX.Y.Z` matching the version, push the tag. The CI workflow's publish job verifies tag-matches-csproj before pushing to NuGet.
 
 **Stage parity check** — when changes touch the YAML/schema/generator/visitor stack, diff stage0 vs stage1 Accept output (timing-stripped):
 
@@ -54,10 +58,9 @@ No output ⇒ they match.
 Pick from here when the user asks "what's next?":
 
 1. **Generator-time grammar validation.** Conflicts and unknown-symbol refs surface at runtime today. Linking `SchemaCompiler` source into the generator (same trick as `GrammarSchema.cs` and `Derivation.cs`) lets the generator run `Compile` at build time and emit `LALR0003` / `LALR0004` Roslyn diagnostics with file/line locators. Note: `SchemaCompiler` transitively pulls in `LexicalGrammar/` (LexRule, IRx + impls, IRxParser) — that's a substantial source-link surface, not a one-file shot.
-2. **Source-generator NuGet packaging.** Consumer csprojs need a `<Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />` workaround so Roslyn's analyzer host can resolve the generator's YamlDotNet dependency. Real packaging puts YamlDotNet inside the analyzer's `analyzers/dotnet/cs/` folder; ship the generator as a NuGet.
-3. **Generic typed visitor return.** `IVisitor.Visit(…)` returns `object`. A `T` generic on the visitor / `BuildActions<T>` would remove the cast at the call site. More codegen work; only do it once a user complains.
-4. **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based today (documented). Add an optional decoder for codepoint columns if a user asks for diagnostics-quality positions.
-5. **More example grammars.** TOML config, C declaration syntax (the famous "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each ships under `examples/`.
+2. **Generic typed visitor return.** `IVisitor.Visit(…)` returns `object`. A `T` generic on the visitor / `BuildActions<T>` would remove the cast at the call site. More codegen work; only do it once a user complains.
+3. **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based today (documented). Add an optional decoder for codepoint columns if a user asks for diagnostics-quality positions.
+4. **More example grammars.** TOML config, C declaration syntax (the famous "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each ships under `examples/`.
 
 ## Importers — explicitly *not* on the roadmap
 
