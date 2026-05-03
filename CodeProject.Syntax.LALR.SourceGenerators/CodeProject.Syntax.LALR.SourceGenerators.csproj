@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Roslyn analyzers / source generators must target netstandard2.0; this
+         overrides the net10.0 in Directory.Build.props. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!-- Mark this as a Roslyn component so VS / dotnet build treat the output as
+         an analyzer DLL, and bake in the strict analyzer compatibility rules. -->
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+    <!-- Generators don't ship as a normal library output. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsPackable>false</IsPackable>
+    <DevelopmentDependency>true</DevelopmentDependency>
+
+    <RootNamespace>CodeProject.Syntax.LALR.SourceGenerators</RootNamespace>
+    <AssemblyName>CodeProject.Syntax.LALR.SourceGenerators</AssemblyName>
+
+    <!-- RS2008 wants a Shipped/Unshipped tracking file for analyzer rules; that's
+         the right discipline once we publish the generator as a NuGet package, but
+         it's noise while everything is in-tree. -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core Roslyn API. PrivateAssets=all keeps it out of the analyzer's published surface. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" PrivateAssets="all" />
+    <!-- YAML deserialiser — runs only at build time inside the analyzer host. Never
+         ships into the consumer's runtime binary. GeneratePathProperty exposes
+         $(PkgYamlDotNet) for analyzer-packaging hooks if/when we publish a NuGet. -->
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

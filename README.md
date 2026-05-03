@@ -66,7 +66,8 @@ What this project deliberately is **not**:
 | `CodeProject.Syntax.LALR/` | Library (net10.0, AOT-compatible, trimmable) | Grammar model, LALR(1) parse-table generator, runtime parser, lexer infrastructure (`PipeBytesLexer`, `IRx` combinators, byte-DFA compiler), `Item` value type. |
 | `Bootstrap/` | Exe (`PublishAot=true`) | End-to-end smoke test: hand-codes a BNF *meta-grammar* in C#, then parses a BNF source string with the resulting parser. |
 | `TestProject/` | Exe (`PublishAot=true`) | End-to-end demo: arithmetic-expression grammar with operator precedence, evaluating constant sub-expressions during reduction. |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform; `OutputType=Exe`) | 173 unit tests covering the regex-AST builders, the byte/codepoint DFAs, the iterator infrastructure, and the lexer. |
+| `CodeProject.Syntax.LALR.SourceGenerators/` | Roslyn analyzer (netstandard2.0, `IsRoslynComponent=true`) | YAML grammar source generator. Reads `*.lalr.yaml` AdditionalFiles at build time, emits a populated `GrammarSchema` in the consumer's namespace. YamlDotNet is `PrivateAssets="all"` so it never ships to user binaries. |
+| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform; `OutputType=Exe`) | 273+ tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, and the source generator (incl. end-to-end "emit → compile → load → parse"). |
 
 Shared MSBuild settings (`TargetFramework`, `LangVersion=14`, …) live in
 `Directory.Build.props`.
@@ -382,14 +383,17 @@ yet and tracked as the next architectural milestones:
   grammar files in YAML and a source generator producing the parser table at
   build time. Don't double down on inline rewriters in new grammars if you can
   help it.
-- **Grammars-as-data is half-built.** `CodeProject.Syntax.LALR/Schema/` defines
-  `GrammarSchema` POCOs and a `SchemaCompiler` that turns them into runtime
-  `Grammar` + `LexRule[]` (with a tiny in-house regex-to-`IRx` parser handling
-  the lexer-rule `match:` strings). What's still missing is a YAML deserializer
-  + Roslyn source generator (Phase 2) and the typed-AST/visitor scaffold
-  (Phase 3). The schema POCOs intentionally use `set` rather than `init` so
-  any reflection-based deserializer (System.Text.Json, YamlDotNet) can populate
-  them without ceremony.
+- **Grammars-as-data is built; YAML support is build-time only.**
+  `CodeProject.Syntax.LALR/Schema/` defines `GrammarSchema` POCOs and a
+  `SchemaCompiler` that turns them into runtime `Grammar` + `LexRule[]` (with a
+  tiny in-house regex-to-`IRx` parser handling the lexer-rule `match:` strings).
+  `CodeProject.Syntax.LALR.SourceGenerators/` is a Roslyn `IIncrementalGenerator`
+  that reads `*.lalr.yaml` AdditionalFiles at build time (via YamlDotNet, kept
+  private so it never lands in the consumer's runtime binary) and emits a
+  populated `GrammarSchema` in a `static partial class` named after the YAML
+  file. What's still missing: typed-AST / visitor split (Phase 3) so semantic
+  actions stop living inside `Production` rewriters, and the self-host where
+  Bootstrap's grammar moves from C# to a `.lalr.yaml` file (Phase 4).
 - **Async-per-token at the parser/iterator boundary.** The lexer's inner loop
   is sync and the only `await` per byte-buffer is `PipeReader.ReadAsync`,
   which is the right shape — but `IAsyncIterator<Item>` and the parser's

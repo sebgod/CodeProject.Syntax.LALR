@@ -12,10 +12,22 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <!-- Roslyn test infrastructure for driving the source generator under unit tests
+         (CSharpGeneratorDriver, AdditionalText, etc). Generator tests instantiate the
+         generator class directly and inspect outputs/diagnostics. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" />
+    <!-- YamlDotNet is PrivateAssets=all in the generator project, so it doesn't flow
+         transitively. Generator tests run the generator inside this process — we need
+         YamlDotNet loaded here too. -->
+    <PackageReference Include="YamlDotNet" Version="17.1.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <!-- Reference the generator as a normal library (not as an Analyzer) so tests can
+         instantiate it and feed it AdditionalTexts directly. -->
+    <ProjectReference Include="..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      ReferenceOutputAssembly="true" />
   </ItemGroup>
 
 </Project>
