@@ -230,8 +230,12 @@ _Pvt_Extensions
 # FAKE - F# Make
 .fake/
 
-# Claude Code session metadata
-.claude/
+# Claude Code session metadata. Personal settings (settings.json,
+# permissions, hooks) stay local, but project-shared skills under
+# .claude/skills/ are tracked so the team gets the same bootstrap context.
+# (Use .claude/* not .claude/ — git can't re-include below an excluded dir.)
+.claude/*
+!.claude/skills/
 
 # Modern editor configs (track per-project as needed)
 .vscode/

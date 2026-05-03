@@ -1,0 +1,80 @@
+---
+name: lalr
+description: Bootstrap context for the CodeProject.Syntax.LALR repo. Run at the start of a session to recover the canonical state — phase status, where the YAML/schema/generator/visitor pipeline lives, the verification commands that must pass before committing, and the ranked list of outstanding work. Invoke when you need "what is this repo and what should I do next?".
+---
+
+# LALR repo skill
+
+LALR(1) parser-table generator + runtime in C# (.NET 10 / AOT). Modernised in 2026 from Phillip Voyle's CodeProject article. Architecture and conventions live in `CLAUDE.md` at the repo root — read it first if you haven't. This skill is the *what's done / what's next / how to verify* layer on top.
+
+## Read these first, in order
+
+1. `CLAUDE.md` — project architecture, conventions, AOT/test gotchas. Authoritative.
+2. `handoff.md` — last-session notes, untracked. May be stale; treat as a hint, not gospel.
+3. `git log --oneline -10` — recent commits. The last few are large milestones (`Phase 2`, `Phase 3`, `Phase 4`).
+
+## Phase status (as of last commit)
+
+| Phase | Status | What landed |
+|---|---|---|
+| Modernisation | ✅ | .NET 10 / C# 14 / AOT, byte-DFA lexer pipeline (`PipeBytesLexer`), xUnit v3 on MTP, fail-fast diagnostics across all layers (`GrammarConflictException`, `LexerException`, `ParseErrorException`), `Item.SourcePosition`. |
+| Schema layer (1) | ✅ | `Schema/GrammarSchema.cs` POCOs, `Schema/IRxParser.cs` regex dialect, `Schema/SchemaCompiler.cs`. Pure C# data → `(Grammar, LexRule[])`. |
+| Source generator (2) | ✅ | `CodeProject.Syntax.LALR.SourceGenerators` — Roslyn `IIncrementalGenerator` consumes `*.lalr.yaml` AdditionalFiles, emits `<ClassName>.g.cs` with `GrammarSchema Schema { get; }`. YamlDotNet build-time only. |
+| Typed AST (3a) | ✅ | `AstEmitter` writes `<ClassName>.Ast.g.cs` — `public sealed record <Action>(Item Arg0, …)` per distinct action. Arity conflicts surface as `LALR0002`. |
+| Visitor + wiring (3b) | ✅ | `VisitorEmitter` writes `<ClassName>.Visitor.g.cs` — nested `IVisitor` interface + `BuildActions(IVisitor)` that adapts visitor calls into the dictionary `SchemaCompiler.Compile` consumes. |
+| Self-host (4) | ✅ | `Bootstrap.Stage1/` consumes `bnf.lalr.yaml` end-to-end. `Bootstrap/` (stage0) keeps the inline grammar as the no-generator-no-YAML reference; both produce byte-identical Accept output. |
+
+## Canonical re-verification (run before any commit)
+
+```bash
+dotnet build CodeProject.Syntax.LALR.sln -c Debug --nologo                              # 0 warnings
+dotnet test  CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug  # 280+ pass
+dotnet run   --project Bootstrap/Bootstrap.csproj            -c Release --no-build       # ends "Accept (…)"
+dotnet run   --project Bootstrap.Stage1/Bootstrap.Stage1.csproj -c Release --no-build    # ends "Accept (…)"
+dotnet run   --project TestProject/TestProject.csproj         -c Release --no-build      # ends "Accept (…): S' -> [0]"
+dotnet publish Bootstrap/Bootstrap.csproj -c Release                                     # AOT clean
+dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj -c Release                       # AOT clean
+```
+
+**Stage parity check** — when changes touch the YAML/schema/generator/visitor stack, diff stage0 vs stage1 Accept output (timing-stripped):
+
+```bash
+diff <(dotnet run --project Bootstrap/Bootstrap.csproj --no-build -c Release \
+        | grep -oE '^Accept.*' | sed 's/^Accept ([^)]*): /Accept: /') \
+     <(dotnet run --project Bootstrap.Stage1/Bootstrap.Stage1.csproj --no-build -c Release \
+        | grep -oE '^Accept.*' | sed 's/^Accept ([^)]*): /Accept: /')
+```
+
+No output ⇒ they match.
+
+## Outstanding work (ranked by value)
+
+Pick from here when the user asks "what's next?":
+
+1. **Ship a non-toy example grammar.** JSON (8 productions, well-known) as `examples/json.lalr.yaml` + a small driver in `Bootstrap.Stage1`-style. Validates the pipeline on a grammar nobody wrote with the parser in mind. Bigger candidates after that: a real config language (TOML), C declaration syntax, an arithmetic-with-unary-ops upgrade for `TestProject`.
+2. **Records emitted but unused.** `<ClassName>.Ast.g.cs` ships record types but no visitor constructs them — `BnfVisitor` returns ad-hoc `MetaTerm`/`MetaItemList<T>`/`Tuple`. Either type the visitor return as the record (visitor methods return `MakeAdd` not `object`) or drop the AST emission until a downstream consumer wants it.
+3. **Generator-time grammar validation.** Conflicts and unknown-symbol refs surface at runtime today. Linking `SchemaCompiler` source into the generator (same trick as `GrammarSchema.cs` and `Derivation.cs`) lets the generator run `Compile` at build time and emit `LALR0003` / `LALR0004` Roslyn diagnostics with file/line locators.
+4. **Source-generator NuGet packaging.** Consumer csprojs need a `<Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />` workaround so Roslyn's analyzer host can resolve the generator's YamlDotNet dependency. Real packaging puts YamlDotNet inside the analyzer's `analyzers/dotnet/cs/` folder; ship the generator as a NuGet.
+5. **Generic typed visitor return.** `IVisitor.Method(…)` returns `object`. A `T` generic on the visitor / `BuildActions<T>` would remove the cast at the call site. More codegen work; only do it once a user complains.
+6. **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based today (documented). Add an optional decoder for codepoint columns if a user asks for diagnostics-quality positions.
+
+## Importers — explicitly *not* on the roadmap
+
+EBNF, YACC/Bison, ANTLR4, GOLD all have format-specific edge cases (EBNF's `{}`/`[]` desugaring, YACC's C action bodies, ANTLR's lexer modes + semantic predicates). Each is a multi-week project worth doing only when a real user is blocked. Until then, prefer manual ports of well-known grammars to YAML — that gives example-doc value without the importer maintenance burden. Revisit if/when this changes.
+
+## When asked to commit
+
+- Don't include `handoff.md` (untracked by intent).
+- Co-author trailer is `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
+- Use HEREDOC for the commit message body (formatting).
+- Don't push without explicit user request — the branch typically runs ahead of `origin/master`.
+
+## When stuck
+
+- `git log --oneline -20` — what landed recently
+- `Bootstrap/Program.cs` — the always-buildable reference grammar (no generator, no YAML)
+- `Bootstrap.Stage1/Program.cs` — the same grammar, pipeline-driven
+- `bnf.lalr.yaml` (Stage1) — what a real grammar definition looks like
+- `CodeProject.Syntax.LALR.Tests/SourceGenerators/` — driving the generator under test
+
+When something breaks in the pipeline, the diagnosis order is: (1) does Bootstrap (stage0) still parse? if yes, the runtime is fine — move on. (2) does `dotnet build` of `Bootstrap.Stage1` succeed? if yes, the generator + YAML loader work — move to runtime. (3) does the test suite pass? (4) only then dive into the specific symptom.
