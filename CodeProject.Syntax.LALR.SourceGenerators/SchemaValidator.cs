@@ -111,15 +111,19 @@ internal static class SchemaValidator
             return;
         }
 
+        // Null-checked above (groupCount == 0 returns early); null-forgiving
+        // on indexer access is safe.
+        var groups = schema.Productions!;
         for (var gi = 0; gi < groupCount; gi++)
         {
-            var group = schema.Productions[gi];
+            var group = groups[gi];
             if (group == null)
             {
                 errors.Add(new ValidationError($"productions[{gi}]", "is null"));
                 continue;
             }
-            var ruleCount = group.Rules?.Count ?? 0;
+            var rules = group.Rules;
+            var ruleCount = rules?.Count ?? 0;
             if (ruleCount == 0)
             {
                 errors.Add(new ValidationError($"productions[{gi}].rules", "must be non-empty"));
@@ -127,7 +131,7 @@ internal static class SchemaValidator
             }
             for (var ri = 0; ri < ruleCount; ri++)
             {
-                var rule = group.Rules[ri];
+                var rule = rules![ri];
                 var path = $"productions[{gi}].rules[{ri}]";
                 ValidateProduction(rule, symbols, path, errors);
             }
@@ -150,10 +154,11 @@ internal static class SchemaValidator
             errors.Add(new ValidationError($"{path}.lhs", $"= '{rule.Lhs}' is not in symbols[]"));
         }
 
-        var rhsCount = rule.Rhs?.Count ?? 0;
+        var rhs = rule.Rhs;
+        var rhsCount = rhs?.Count ?? 0;
         for (var i = 0; i < rhsCount; i++)
         {
-            var name = rule.Rhs[i];
+            var name = rhs![i];
             if (string.IsNullOrEmpty(name))
             {
                 errors.Add(new ValidationError($"{path}.rhs[{i}]", "is null or empty"));
