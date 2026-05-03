@@ -46,6 +46,21 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Structural error in the loaded schema — unknown symbol references in
+    /// productions or lexer rules, missing root state, duplicate symbol names,
+    /// mutually-exclusive lexer instructions, etc. Mirrors the runtime
+    /// <c>SchemaCompilationException</c> checks; surfacing them at build time
+    /// turns "boom on first parse" into a build squiggle with a path locator.
+    /// </summary>
+    private static readonly DiagnosticDescriptor InvalidSchemaDescriptor = new(
+        id: "LALR0003",
+        title: "Invalid LALR grammar schema",
+        messageFormat: "{0}: {1}: {2}",
+        category: "CodeProject.Syntax.LALR.SourceGenerators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // The consumer's RootNamespace (csproj <RootNamespace>) lands as a
@@ -99,6 +114,23 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         {
             // Empty file — emit nothing rather than a class with an empty schema.
             return;
+        }
+
+        // LALR0003: structural-validation pass before emit. Unknown symbol
+        // references / missing root state / duplicate symbols / etc would all
+        // throw at runtime in SchemaCompiler.Compile; reporting them here
+        // turns those into build-time diagnostics with path locators. We still
+        // emit the schema so the user can see what was generated — only the
+        // grammar's *meaning* is broken, not the C# code we produce.
+        var validationErrors = SchemaValidator.Validate(schema);
+        foreach (var err in validationErrors)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidSchemaDescriptor,
+                Location.Create(path, default, default),
+                Path.GetFileName(path),
+                err.Path,
+                err.Message));
         }
 
         var className = DeriveClassName(path);

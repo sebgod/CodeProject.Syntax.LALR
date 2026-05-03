@@ -250,6 +250,101 @@ public class GrammarSourceGeneratorTests
         Assert.Contains("public sealed record MakeAdd(Item Arg0, Item Arg1, Item Arg2);", astSource);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // LALR0003: structural-validation diagnostics
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void UnknownSymbolInProduction_ReportsLalr0003()
+    {
+        // Production references "Z", which isn't in symbols[]. Pre-fix this
+        // surfaced only at runtime via SchemaCompilationException — now it's
+        // a build-time diagnostic with the offending path locator.
+        const string yaml = """
+            symbols: ["S'", E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,  rhs: [n] }
+                  - { lhs: E,  rhs: [Z] }
+            lexer:
+              root:
+                - { symbol: n, match: "[0-9]+" }
+            """;
+
+        var (_, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0003" && d.GetMessage().Contains("rhs[0]") && d.GetMessage().Contains("'Z'"));
+    }
+
+    [Fact]
+    public void MissingRootLexerState_ReportsLalr0003()
+    {
+        const string yaml = """
+            symbols: ["S'", E]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,    rhs: [] }
+            lexer:
+              other:
+                - { symbol: E, match: "x" }
+            """;
+
+        var (_, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0003" && d.GetMessage().Contains("'root'"));
+    }
+
+    [Fact]
+    public void DuplicateSymbol_ReportsLalr0003()
+    {
+        const string yaml = """
+            symbols: ["S'", E, E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,  rhs: [n] }
+            lexer:
+              root:
+                - { symbol: n, match: "[0-9]+" }
+            """;
+
+        var (_, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0003" && d.GetMessage().Contains("duplicate"));
+    }
+
+    [Fact]
+    public void LexerRuleWithMutuallyExclusiveInstructions_ReportsLalr0003()
+    {
+        // Both push and action set on the same lexer rule — only one allowed.
+        const string yaml = """
+            symbols: ["S'", E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,  rhs: [n] }
+            lexer:
+              root:
+                - { symbol: n, match: "[0-9]+", push: other, action: ignore }
+              other:
+                - { symbol: n, match: "y" }
+            """;
+
+        var (_, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0003" && d.GetMessage().Contains("at most one"));
+    }
+
+    [Fact]
+    public void ValidGrammar_ProducesNoLalr0003()
+    {
+        // Sanity: the existing arithmetic sample should pass validation cleanly.
+        var (_, diags) = RunGenerator(SampleArithmetic);
+        Assert.DoesNotContain(diags, d => d.Id == "LALR0003");
+    }
+
     [Fact]
     public void DuplicateActionWithDifferentArity_ReportsLalr0002()
     {

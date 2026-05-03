@@ -25,6 +25,7 @@ LALR(1) parser-table generator + runtime in C# (.NET 10 / AOT). Modernised in 20
 | Self-host (4) | ✅ | `Bootstrap.Stage1/` consumes `bnf.lalr.yaml` end-to-end. `Bootstrap/` (stage0) keeps the inline grammar as the no-generator-no-YAML reference; both produce byte-identical Accept output. |
 | JSON example | ✅ | `examples/Json/` parses real JSON with a 50-line visitor that builds `Dictionary<string,object>` / `List<object>` / primitives. Demonstrates the pipeline on a grammar nobody designed for this parser. |
 | NuGet packaging + CI | ✅ | Runtime project packs `CodeProject.Syntax.LALR.{nupkg,snupkg}` with the source generator + YamlDotNet bundled in `analyzers/dotnet/cs/` (so PackageReference consumers don't need the analyzer-DLL workaround). Deterministic + SourceLink + symbols. `.github/workflows/dotnet.yml` builds + tests + stage-parity-checks on push, packs + uploads artifact on master, publishes to NuGet on `v*` tag using `NUGET_SECRET`. |
+| 2.1.0 features | ✅ | (a) `SourcePosition.GetCodepointColumn(ReadOnlySpan<byte> source)` for diagnostics-quality non-ASCII columns. (b) Generic `IVisitor<out T>` + `BuildActions<T>` so evaluators can return typed values directly (`IVisitor<int>` etc.) instead of always boxing to `object`. (c) `LALR0003` Roslyn diagnostics from a generator-side `SchemaValidator` — unknown symbol refs, missing root state, duplicate symbols, mutually-exclusive lexer instructions surface at build time instead of runtime. |
 
 ## Canonical re-verification (run before any commit)
 
@@ -57,10 +58,10 @@ No output ⇒ they match.
 
 Pick from here when the user asks "what's next?":
 
-1. **Generator-time grammar validation.** Conflicts and unknown-symbol refs surface at runtime today. Linking `SchemaCompiler` source into the generator (same trick as `GrammarSchema.cs` and `Derivation.cs`) lets the generator run `Compile` at build time and emit `LALR0003` / `LALR0004` Roslyn diagnostics with file/line locators. Note: `SchemaCompiler` transitively pulls in `LexicalGrammar/` (LexRule, IRx + impls, IRxParser) — that's a substantial source-link surface, not a one-file shot.
-2. **Generic typed visitor return.** `IVisitor.Visit(…)` returns `object`. A `T` generic on the visitor / `BuildActions<T>` would remove the cast at the call site. More codegen work; only do it once a user complains.
-3. **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based today (documented). Add an optional decoder for codepoint columns if a user asks for diagnostics-quality positions.
-4. **More example grammars.** TOML config, C declaration syntax (the famous "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each ships under `examples/`.
+1. **Pre-baked parse tables (compiler-compiler mode).** Today the generator emits a `GrammarSchema` POCO; consumers call `SchemaCompiler.Compile(schema, …)` at runtime to build the LALR(1) parse table. A Phase 5 generator could *run* the schema compiler at build time and emit the populated `Grammar` + `ParseTable.Actions[,]` array directly. Tradeoffs: bigger generated source, but smaller runtime AOT image (the table-builder + DFA-builder code can trim away on the consumer), faster startup, and grammar conflicts (S/R, R/R) surface as `LALR0004` Roslyn diagnostics at build time instead of `GrammarConflictException` at first `new Parser(grammar)`. Both modes (runtime-compile vs. pre-baked) are legitimate — different points on the size/speed/diagnostics curve.
+2. **Deeper generator-time validation: regex patterns.** Slice 1 (LALR0003) covers structural errors. Linking `IRxParser` source into the generator would let bad `match:` regexes surface at build time too. Smaller scope than #1 — `IRxParser` only needs the regex AST nodes (`CharRx`, `GroupRx`, etc.) which live in `LexicalGrammar/`. Could land before the full Phase 5 if a user hits a runtime regex error.
+3. **More example grammars.** TOML config, C declaration syntax (the famous "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each ships under `examples/`.
+4. **Async-per-token at the parser/iterator boundary.** The lexer's inner loop is sync and the only `await` per byte-buffer is `PipeReader.ReadAsync`. The remaining async-per-token cost lives in `IAsyncIterator<Item>` callers and the parser loop. A pure-sync, `ref struct`-style parser is possible; not a priority.
 
 ## Importers — explicitly *not* on the roadmap
 
