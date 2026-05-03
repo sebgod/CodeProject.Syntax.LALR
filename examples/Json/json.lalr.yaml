@@ -1,0 +1,85 @@
+# JSON grammar (RFC 8259, simplified). Demonstrates the YAML → schema → AST →
+# visitor pipeline on a real-world grammar nobody designed with this parser in
+# mind. The generated visitor surface (one `Visit(Record)` overload per action)
+# is enough to write a real JSON-to-CLR-object evaluator in ~50 lines (see
+# Program.cs).
+#
+# Limitations vs. RFC 8259:
+#   - Strings: backslash escapes (\", \\, \n, \uXXXX, …) aren't handled — the
+#     lexer rule is the simplest "[^"]*" pattern. Adding full escape support
+#     needs alternation, which IRxParser deliberately doesn't do (express it as
+#     multiple lexer rules with a pushed quoted-string state, like Bootstrap).
+#   - Numbers: leading-zero check (no "01") isn't enforced.
+#   - Trailing commas: rejected (matches RFC).
+
+symbols:
+  - V        # 0  (value, start)
+  - O        # 1  (object)
+  - M        # 2  (members — non-empty list of pairs)
+  - P        # 3  (pair = string : value)
+  - A        # 4  (array)
+  - E        # 5  (elements — non-empty list of values)
+  - '{'      # 6
+  - '}'      # 7
+  - '['      # 8
+  - ']'      # 9
+  - ','      # 10
+  - ':'      # 11
+  - 'true'   # 12
+  - 'false'  # 13
+  - 'null'   # 14
+  - string   # 15
+  - number   # 16
+  - WS       # 17  (lexer-only; emitted with action: ignore)
+
+productions:
+  # V is the start symbol. Each branch carries an action so the visitor can
+  # turn the lexer-side scalar (string/number/keyword) into a real CLR value
+  # at reduction time. Object/array passthroughs simply hand back the inner
+  # node's already-built result.
+  - derivation: none
+    rules:
+      - { lhs: V, rhs: [O],         action: valueObject }
+      - { lhs: V, rhs: [A],         action: valueArray }
+      - { lhs: V, rhs: [string],    action: valueString }
+      - { lhs: V, rhs: [number],    action: valueNumber }
+      - { lhs: V, rhs: ['true'],    action: valueTrue }
+      - { lhs: V, rhs: ['false'],   action: valueFalse }
+      - { lhs: V, rhs: ['null'],    action: valueNull }
+
+  - derivation: none
+    rules:
+      - { lhs: O, rhs: ['{', '}'],          action: emptyObject }
+      - { lhs: O, rhs: ['{', M, '}'],       action: objectValue }
+      - { lhs: A, rhs: ['[', ']'],          action: emptyArray }
+      - { lhs: A, rhs: ['[', E, ']'],       action: arrayValue }
+
+  # Members + elements are right-recursive lists; LeftMost picks the
+  # one-rule path on a shift/reduce ambiguity at the comma.
+  - derivation: leftmost
+    rules:
+      - { lhs: M, rhs: [P],                 action: membersOne }
+      - { lhs: M, rhs: [P, ',', M],         action: membersCons }
+      - { lhs: E, rhs: [V],                 action: elementsOne }
+      - { lhs: E, rhs: [V, ',', E],         action: elementsCons }
+
+  - derivation: none
+    rules:
+      - { lhs: P, rhs: [string, ':', V],    action: pair }
+
+# Single lexer state — JSON has no string-content state because we use the
+# crude "[^"]*" pattern (see grammar header for the limitation).
+lexer:
+  root:
+    - { symbol: string,  match: '"[^"]*"' }
+    - { symbol: number,  match: '-?[0-9]+(\.[0-9]+)?([eE][+\-]?[0-9]+)?' }
+    - { symbol: 'true',  match: 'true' }
+    - { symbol: 'false', match: 'false' }
+    - { symbol: 'null',  match: 'null' }
+    - { symbol: '{',     match: '\{' }
+    - { symbol: '}',     match: '\}' }
+    - { symbol: '[',     match: '\[' }
+    - { symbol: ']',     match: '\]' }
+    - { symbol: ',',     match: ',' }
+    - { symbol: ':',     match: ':' }
+    - { symbol: WS,      match: '[ \t\r\n]+', action: ignore }

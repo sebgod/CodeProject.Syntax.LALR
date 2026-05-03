@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Example project: JSON grammar driven by the YAML source generator. Mirrors
+    Bootstrap.Stage1's wiring (analyzer ProjectReference + YamlDotNet
+    PackageReference + <Analyzer Include="$(PkgYamlDotNet)\..."> hook). PublishAot
+    is intentionally off here — the example is a quick demo of the pipeline,
+    not a deliverable; flip it on to verify AOT compatibility on demand.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Examples.Json</RootNamespace>
+    <AssemblyName>Examples.Json</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- json.lalr.yaml -> partial class Json in Examples.Json. -->
+    <AdditionalFiles Include="json.lalr.yaml" />
+  </ItemGroup>
+
+</Project>
