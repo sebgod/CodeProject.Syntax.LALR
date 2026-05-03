@@ -30,8 +30,15 @@ A minimal YAML grammar — a tiny calculator:
 
 ```yaml
 # grammar.lalr.yaml
-symbols: [E, '+', n]
+# Index 0 is the start symbol. The parser returns as soon as the stack
+# settles on the start symbol, so make it distinct from the recursive
+# expression — otherwise the first reduction terminates the parse before
+# any operator gets matched.
+symbols: [S, E, '+', n, WS]
 productions:
+  - derivation: none
+    rules:
+      - { lhs: S, rhs: [E] }   # start production; default Reduction passes E through
   - derivation: leftmost
     rules:
       - { lhs: E, rhs: [E, '+', E], action: add }
@@ -40,12 +47,12 @@ lexer:
   root:
     - { symbol: n,   match: '[0-9]+' }
     - { symbol: '+', match: '\+' }
-    - { symbol: E,   match: '[ \t]+', action: ignore }
+    - { symbol: WS,  match: '[ \t]+', action: ignore }
 ```
 
-The generator emits `Grammar` (the partial class is named after the YAML
-file — `grammar.lalr.yaml` → `Grammar`), with a populated `Schema` property,
-one record per action, and an `IVisitor` interface:
+The generator emits a partial class named after the YAML file
+(`grammar.lalr.yaml` → `Grammar`), with a populated `Schema` property, one
+record per action, and an `IVisitor` interface:
 
 ```csharp
 using CodeProject.Syntax.LALR;
@@ -60,14 +67,16 @@ class Calc : Grammar.IVisitor
 
 var (g, lex) = SchemaCompiler.Compile(Grammar.Schema, Grammar.BuildActions(new Calc()));
 var parser = new Parser(g);
-using var lexer = PipeBytesLexer.FromString("1 + 2 + 3", lex);
+using var lexer = PipeBytesLexer.FromString("1 + 2 + 3 + 4", lex);
 using var tokens = new AsyncLATokenIterator(lexer);
 var result = await parser.ParseInputAsync(tokens);
-Console.WriteLine(result.Content);  // 6
+Console.WriteLine(result.Content);  // 10
 ```
 
-For a non-toy example see `examples/Json/` — a real JSON parser in ~50 visitor
-lines that builds `Dictionary<string,object>` / `List<object>` / primitives.
+The full working version is in [`examples/Calculator/`](examples/Calculator).
+For a non-toy example see [`examples/Json/`](examples/Json) — a real JSON
+parser in ~50 visitor lines that builds `Dictionary<string,object>` /
+`List<object>` / primitives.
 
 ---
 
@@ -117,6 +126,7 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `Bootstrap/` | Exe (`PublishAot=true`) | **Stage 0**: hand-codes the BNF meta-grammar in C# and parses a BNF source string with the resulting parser. Reference implementation — depends only on the runtime library, no generator, no YAML. |
 | `Bootstrap.Stage1/` | Exe (`PublishAot=true`) | **Stage 1**: same BNF meta-grammar, but defined in `bnf.lalr.yaml` and consumed via the source generator + visitor pipeline. CI diffs stage0 ↔ stage1 Accept output for byte-identical parity. |
 | `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression demo with operator precedence and constant folding during reduction. Inline C# grammar; uses an inline tokenizer instead of `PipeBytesLexer` to show that any `IAsyncIterator<Item>` plugs in. |
+| `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a 5-symbol calculator grammar (`1 + 2 + 3 + 4 = 10`) with two visitor methods. Mirrors the README quick-start. |
 | `examples/Json/` | Exe | Real JSON parser via the YAML pipeline. ~50-line `IVisitor` implementation builds `Dictionary<string,object>` / `List<object>` / primitives. |
 | `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 283 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
@@ -318,6 +328,13 @@ folding during reduction (e.g. `(24 / 12) + 2 * (3-4)` reduces to `0` at parse
 time), and an inline tokenizer instead of `PipeBytesLexer` to show that any
 `IAsyncIterator<Item>` plugs in.
 
+### `examples/Calculator` — minimal YAML demo
+
+Three productions, one lexer state, two visitor methods. Mirrors the README
+quick-start. The smallest grammar that exercises every interesting bit of the
+YAML pipeline (start production, leftmost-derivation conflict resolution,
+ignored whitespace, an emitted record per action).
+
 ### `examples/Json` — real JSON via the YAML pipeline
 
 `json.lalr.yaml` (16 productions) plus a ~50-line `IVisitor` implementation
@@ -341,10 +358,11 @@ dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -
 dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug -- --filter-method "*PipeBytesLexer*"
 
 # Run the demos / examples end-to-end
-dotnet run --project Bootstrap/Bootstrap.csproj                -c Release    # stage 0 (inline grammar)
-dotnet run --project Bootstrap.Stage1/Bootstrap.Stage1.csproj  -c Release    # stage 1 (YAML pipeline)
-dotnet run --project TestProject/TestProject.csproj            -c Release    # arithmetic + constant folding
-dotnet run --project examples/Json/Examples.Json.csproj        -c Release    # real JSON via visitor
+dotnet run --project Bootstrap/Bootstrap.csproj                    -c Release    # stage 0 (inline grammar)
+dotnet run --project Bootstrap.Stage1/Bootstrap.Stage1.csproj      -c Release    # stage 1 (YAML pipeline)
+dotnet run --project TestProject/TestProject.csproj                -c Release    # arithmetic + constant folding
+dotnet run --project examples/Calculator/Examples.Calculator.csproj -c Release   # minimal YAML demo
+dotnet run --project examples/Json/Examples.Json.csproj            -c Release    # real JSON via visitor
 
 # Native AOT publish (verifies library + demos stay AOT-clean)
 dotnet publish Bootstrap/Bootstrap.csproj                -c Release

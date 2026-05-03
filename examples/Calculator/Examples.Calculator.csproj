@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Quick-start example: the calculator grammar from the README's first fold.
+    Three productions, one lexer state, two visitor methods. Smallest possible
+    "real" demonstration of the YAML pipeline — useful as a copy-paste starter
+    for users and as a sanity check for the bundled-analyzer package shape.
+
+    In-tree this uses ProjectReference (same pattern as examples/Json); a
+    fresh consumer outside this repo would swap to a single PackageReference
+    on `CodeProject.Syntax.LALR` and drop the explicit generator hookup.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Examples.Calculator</RootNamespace>
+    <AssemblyName>Examples.Calculator</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- grammar.lalr.yaml -> partial class Grammar in Examples.Calculator. -->
+    <AdditionalFiles Include="grammar.lalr.yaml" />
+  </ItemGroup>
+
+</Project>

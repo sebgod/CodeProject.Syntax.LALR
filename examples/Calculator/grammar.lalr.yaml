@@ -1,0 +1,29 @@
+# Calculator grammar — the smallest grammar that exercises every interesting
+# bit of the YAML pipeline:
+#   - explicit start production (S -> E): the parser returns as soon as the
+#     stack settles on the start symbol (index-0 in `symbols`), so the start
+#     symbol must be distinct from the recursive expression — otherwise the
+#     first reduction terminates the parse before any operator gets matched
+#   - precedence group with leftmost derivation (resolves the obvious
+#     left/right associativity ambiguity on `E -> E + E`)
+#   - one terminal symbol that needs lexer-rule escaping (`+` is regex meta)
+#   - one ignored lexer rule (whitespace)
+#   - two production actions ⇒ two emitted records ⇒ two visitor methods
+
+symbols: [S, E, '+', n, WS]
+
+productions:
+  - derivation: none
+    rules:
+      - { lhs: S, rhs: [E] }   # start production — no action; default Reduction passes E through
+
+  - derivation: leftmost
+    rules:
+      - { lhs: E, rhs: [E, '+', E], action: add }
+      - { lhs: E, rhs: [n],         action: number }
+
+lexer:
+  root:
+    - { symbol: n,   match: '[0-9]+' }
+    - { symbol: '+', match: '\+' }
+    - { symbol: WS,  match: '[ \t]+', action: ignore }
