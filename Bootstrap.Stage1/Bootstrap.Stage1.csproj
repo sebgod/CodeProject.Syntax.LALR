@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Stage1 of Bootstrap. The grammar definition lives in bnf.lalr.yaml and is
+    consumed via the YAML source generator (Phase 2 + 3). The companion stage0
+    project (../Bootstrap) keeps the inline C# grammar as a no-generator,
+    no-YAML reference implementation; both should produce identical Accept
+    output for the same BNF input. If they ever diverge, stage0 is the ground
+    truth — investigate the YAML / schema / generator pipeline first.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Bootstrap.Stage1</RootNamespace>
+    <AssemblyName>Bootstrap.Stage1</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <!-- Source generator emits Bnf.g.cs / Bnf.Ast.g.cs / Bnf.Visitor.g.cs from
+         bnf.lalr.yaml at build time. ReferenceOutputAssembly=false because the
+         generator's analyzer DLL only runs during compilation; it doesn't ship
+         in the AOT publish output. -->
+    <ProjectReference Include="..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The generator's YamlDotNet dependency is PrivateAssets="all" inside the
+         generator project, so it doesn't flow to consumers. PackageReference here
+         brings it into the build, GeneratePathProperty exposes $(PkgYamlDotNet),
+         and the <Analyzer> item below loads YamlDotNet into Roslyn's analyzer
+         host so the generator can resolve it at compile time. PrivateAssets="all"
+         keeps YamlDotNet out of the AOT publish output — it's build-time only.
+         (Once we ship a NuGet package for the generator, the analyzer DLL will
+         be packaged with its dependencies and consumers won't need this dance.) -->
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The grammar source. Filename → generated class: bnf.lalr.yaml → Bnf. -->
+    <AdditionalFiles Include="bnf.lalr.yaml" />
+  </ItemGroup>
+
+</Project>

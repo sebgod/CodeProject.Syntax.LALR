@@ -1,0 +1,106 @@
+# BNF meta-grammar — the grammar that recognises BNF source.
+#
+# Symbol order is load-bearing: visitor helpers cast (S)item.ID to recover the
+# symbol kind for things like list-operator naming, so the names+positions here
+# must match the legacy `enum S` in Program.cs (Ast=0 .. EOL=24).
+#
+# Productions with an `action:` get a record + IVisitor method generated; the
+# six action-free rules (A->S, T->V, T->N) reduce as default Reductions and
+# don't need user logic. Production groups are ordered tightest-binding first;
+# `leftmost` resolves left-recursive list shapes, `none` is the default.
+
+symbols:
+  - A
+  - S
+  - R
+  - Cs
+  - N
+  - E
+  - Ts
+  - T
+  - V
+  - 'T"'
+  - "T'"
+  - RCs
+  - 'c"'
+  - "c'"
+  - rc
+  - '|'
+  - '::='
+  - '"'
+  - "'"
+  - '<'
+  - '>'
+  - '.'
+  - ','
+  - '\w'
+  - '\n'
+
+productions:
+  - derivation: none
+    rules:
+      - { lhs: A, rhs: [S] }
+      - { lhs: S, rhs: [R],                  action: syntaxOne }
+      - { lhs: S, rhs: [R, S],               action: syntaxCons }
+      - { lhs: R, rhs: [N, '::=', Cs, '.'],  action: rule }
+
+  - derivation: leftmost
+    rules:
+      - { lhs: Cs, rhs: [Ts],                action: clausesOne }
+      - { lhs: Cs, rhs: [Ts, '|', Cs],       action: clausesCons }
+      - { lhs: Ts, rhs: [T],                 action: termsOne }
+      - { lhs: Ts, rhs: [T, ',', Ts],        action: termsCons }
+
+  - derivation: none
+    rules:
+      - { lhs: T, rhs: [V] }
+      - { lhs: T, rhs: [N] }
+      - { lhs: T, rhs: [],                   action: termEpsilon }
+
+  - derivation: leftmost
+    rules:
+      - { lhs: N,   rhs: ['<', RCs, '>'],    action: ruleName }
+      - { lhs: RCs, rhs: [rc],               action: ruleCharOne }
+      - { lhs: RCs, rhs: [rc, RCs],          action: ruleCharCons }
+
+  - derivation: leftmost
+    rules:
+      - { lhs: V,    rhs: ['"', 'T"', '"'],  action: literalDouble }
+      - { lhs: 'T"', rhs: ['c"'],            action: textDoubleOne }
+      - { lhs: 'T"', rhs: ['c"', 'T"'],      action: textDoubleCons }
+
+  - derivation: leftmost
+    rules:
+      - { lhs: V,    rhs: ["'", "T'", "'"],  action: literalSingle }
+      - { lhs: "T'", rhs: ["c'"],            action: textSingleOne }
+      - { lhs: "T'", rhs: ["c'", "T'"],      action: textSingleCons }
+
+# Lexer states: `root` is the entry point; `double`/`single` are pushed when
+# the lexer sees an opening quote, popped on the matching closing quote. The
+# regex dialect is the small one IRxParser understands — single-quoted YAML
+# strings preserve the regex escapes verbatim (only `''` is YAML-special).
+
+lexer:
+  root:
+    - { symbol: '"',   match: '"',         push: double }
+    - { symbol: "'",   match: "'",         push: single }
+    - { symbol: rc,    match: '[-A-Za-z0-9_]' }
+    - { symbol: '::=', match: '::=' }
+    - { symbol: '|',   match: '\|' }
+    - { symbol: '<',   match: '<' }
+    - { symbol: '>',   match: '>' }
+    - { symbol: '.',   match: '\.' }
+    - { symbol: ',',   match: ',' }
+    # PipeBytesLexer reads raw UTF-8 bytes so it sees CRLF directly — match the optional CR explicitly.
+    - { symbol: '\n',  match: '\r?\n',     action: ignore }
+    - { symbol: '\w',  match: '[ \t]',     action: ignore }
+
+  double:
+    - { symbol: '"',   match: '"',         pop: true }
+    # CommonSet ∪ SymbolSet ∪ '   (the apostrophe is allowed inside "..." literals)
+    - { symbol: 'c"',  match: '[-A-Za-z0-9_| !#$%&()*+,./:;<=>?@\[\\\]^`{}~'']' }
+
+  single:
+    - { symbol: "'",   match: "'",         pop: true }
+    # CommonSet ∪ SymbolSet ∪ "   (the double-quote is allowed inside '...' literals)
+    - { symbol: "c'",  match: '[-A-Za-z0-9_| !#$%&()*+,./:;<=>?@\[\\\]^`{}~"]' }
