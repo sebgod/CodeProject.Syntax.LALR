@@ -25,9 +25,16 @@
   <ItemGroup>
     <ProjectReference Include="..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
     <!-- Reference the generator as a normal library (not as an Analyzer) so tests can
-         instantiate it and feed it AdditionalTexts directly. -->
+         instantiate it and feed it AdditionalTexts directly.
+         Aliases="Generators" pulls the generator out of the global namespace alias.
+         The Schema POCOs and Derivation enum are linked source-shared between the
+         runtime and the generator (so they exist in *both* compiled DLLs); without
+         this alias every test that touches GrammarSchema/Derivation would hit
+         CS0433 ambiguity. Tests that need to reach generator-only types do so via
+         "extern alias Generators;" — see GrammarSourceGeneratorTests.cs. -->
     <ProjectReference Include="..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
-                      ReferenceOutputAssembly="true" />
+                      ReferenceOutputAssembly="true"
+                      Aliases="Generators" />
   </ItemGroup>
 
 </Project>

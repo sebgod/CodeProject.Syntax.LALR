@@ -36,4 +36,14 @@
     <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Schema POCOs and the Derivation enum are shared *as source* with the runtime
+       library (we can't reference the net10.0 assembly from a netstandard2.0 analyzer,
+       but the source itself is platform-agnostic). The runtime is the canonical
+       definition; this project compiles its own copy by linking the same files. Any
+       drift is now a build break, not a silent divergence. -->
+  <ItemGroup>
+    <Compile Include="..\CodeProject.Syntax.LALR\Derivation.cs" Link="Derivation.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\Schema\GrammarSchema.cs" Link="Schema\GrammarSchema.cs" />
+  </ItemGroup>
+
 </Project>

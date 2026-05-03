@@ -6,16 +6,6 @@ using CodeProject.Syntax.LALR.LexicalGrammar;
 namespace CodeProject.Syntax.LALR;
 
 /// <summary>
-/// Describes how to resolve ambiguities within a precedence group
-/// </summary>
-public enum Derivation : byte
-{
-    None,
-    LeftMost,
-    RightMost,
-}
-
-/// <summary>
 /// A grammatical production
 /// </summary>
 public readonly struct Production

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using CodeProject.Syntax.LALR.Schema;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using YamlDotNet.Core;
@@ -30,6 +31,21 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Two productions share the same <c>action</c> name but bind a different number
+    /// of RHS symbols. Phase 3 emits one record per action (visitor in slice 2 calls
+    /// it via a single dispatch path) — that only works if every occurrence has the
+    /// same arity. Reported per-conflict so a multi-clash YAML produces multiple
+    /// distinct diagnostics rather than a single "first one wins" message.
+    /// </summary>
+    private static readonly DiagnosticDescriptor ActionArityConflictDescriptor = new(
+        id: "LALR0002",
+        title: "Action arity conflict",
+        messageFormat: "{0}: {1}",
+        category: "CodeProject.Syntax.LALR.SourceGenerators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // The consumer's RootNamespace (csproj <RootNamespace>) lands as a
@@ -53,7 +69,7 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         var path = additionalText.Path;
         var content = additionalText.GetText(context.CancellationToken)?.ToString();
 
-        YamlGrammarSchema? schema;
+        GrammarSchema? schema;
         try
         {
             schema = YamlGrammarLoader.Load(content);
@@ -86,9 +102,35 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         }
 
         var className = DeriveClassName(path);
-        var hintName = className + ".g.cs";
-        var source = CodeEmitter.Emit(schema, rootNamespace, className);
-        context.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
+        var schemaSource = CodeEmitter.Emit(schema, rootNamespace, className);
+        context.AddSource(className + ".g.cs", SourceText.From(schemaSource, Encoding.UTF8));
+
+        // Phase 3 / slice 1: emit a record per production with an action name. The
+        // visitor + wiring lands in a follow-up slice; for now the records are
+        // surfaced so the user can see (and review) the AST shape before we commit
+        // to it.
+        var astResult = AstEmitter.Emit(schema, rootNamespace, className);
+        foreach (var error in astResult.Errors)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                ActionArityConflictDescriptor,
+                Location.None,
+                Path.GetFileName(path),
+                error.Message));
+        }
+        if (astResult.Source != null)
+        {
+            context.AddSource(className + ".Ast.g.cs", SourceText.From(astResult.Source, Encoding.UTF8));
+        }
+
+        // Phase 3 / slice 2: the visitor interface + actions-dictionary wiring.
+        // Only emitted when at least one production carries an action; otherwise
+        // we'd ship an empty IVisitor + empty dictionary, which is just noise.
+        var visitorSource = VisitorEmitter.Emit(schema, rootNamespace, className);
+        if (visitorSource != null)
+        {
+            context.AddSource(className + ".Visitor.g.cs", SourceText.From(visitorSource, Encoding.UTF8));
+        }
     }
 
     /// <summary>

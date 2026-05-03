@@ -1,3 +1,9 @@
+// File is linked into the netstandard2.0 source-generator project (where
+// <Nullable>enable</Nullable>) as well as the runtime library (where Nullable is
+// disabled). The schema is a bag of public POCOs — null-state isn't a useful
+// invariant here — so we disable nullable locally to keep one source for both.
+#nullable disable
+
 using System.Collections.Generic;
 
 namespace CodeProject.Syntax.LALR.Schema;

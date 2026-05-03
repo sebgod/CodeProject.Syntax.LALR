@@ -1,3 +1,9 @@
+// The generator project is aliased (Aliases="Generators" in the csproj) because
+// it ships its own copy of the linked GrammarSchema / Derivation source. Pull
+// GrammarSourceGenerator in via the alias; everything else uses the runtime
+// library's types via the default global alias.
+extern alias Generators;
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -10,12 +16,12 @@ using System.Threading.Tasks;
 using CodeProject.Syntax.LALR;
 using CodeProject.Syntax.LALR.LexicalGrammar;
 using CodeProject.Syntax.LALR.Schema;
-using CodeProject.Syntax.LALR.SourceGenerators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 using Xunit;
+using GrammarSourceGenerator = Generators::CodeProject.Syntax.LALR.SourceGenerators.GrammarSourceGenerator;
 
 namespace CodeProject.Syntax.LALR.Tests.SourceGenerators;
 
@@ -181,6 +187,261 @@ public class GrammarSourceGeneratorTests
         Assert.Contains("[\"root\"]", source);
         Assert.Contains("Match = \"[0-9]+\"", source);
         Assert.Contains("Action = \"ignore\"", source);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Phase 3 / slice 1: typed AST record emission
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Same arithmetic grammar as <see cref="SampleArithmetic"/> but with action
+    /// names attached. Expected AST: one record per distinct action — <c>MakeNum</c>
+    /// (arity 1) and <c>MakeAdd</c> (arity 3). Productions without an action stay
+    /// untyped (no record emitted), so the start symbol's pass-through rule and the
+    /// whitespace lexer instruction don't pollute the AST file.
+    /// </summary>
+    private const string SampleArithmeticWithActions = """
+        symbols:
+          - "S'"
+          - E
+          - "+"
+          - i
+        productions:
+          - derivation: none
+            rules:
+              - { lhs: "S'", rhs: [E] }
+              - { lhs: E,  rhs: [i], action: makeNum }
+          - derivation: leftmost
+            rules:
+              - { lhs: E, rhs: [E, "+", E], action: makeAdd }
+        lexer:
+          root:
+            - { symbol: i, match: "[0-9]+" }
+            - { symbol: "+", match: "\\+" }
+            - { symbol: i, match: "[ \\t]+", action: ignore }
+        """;
+
+    [Fact]
+    public void NoActions_EmitsOnlySchemaFileNoAstFile()
+    {
+        // The original SampleArithmetic has zero actions on productions, so the AST
+        // emitter should produce nothing. Single tree = the schema file alone.
+        var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.Single(trees);
+    }
+
+    [Fact]
+    public void Actions_EmitOneRecordPerDistinctActionInAstFile()
+    {
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.Equal(3, trees.Length); // schema + ast + visitor (slice 2)
+
+        // Find the AST tree by content — the order in the array isn't guaranteed.
+        // Distinguish from the visitor tree by looking for the record syntax (the
+        // visitor file contains "interface IVisitor", not "public sealed record").
+        var astSource = trees.Select(t => t.ToString())
+            .Single(src => src.Contains("public sealed record", StringComparison.Ordinal));
+
+        Assert.Contains("namespace MyApp;", astSource);
+        Assert.Contains("public static partial class Arithmetic", astSource);
+        Assert.Contains("public sealed record MakeNum(Item Arg0);", astSource);
+        Assert.Contains("public sealed record MakeAdd(Item Arg0, Item Arg1, Item Arg2);", astSource);
+    }
+
+    [Fact]
+    public void DuplicateActionWithDifferentArity_ReportsLalr0002()
+    {
+        // Same action name on two productions with different RHS lengths: 1 vs 3.
+        // The slice-1 contract is one record per action name, so divergent arity is
+        // a hard error surfaced as LALR0002.
+        const string yaml = """
+            symbols: ["S'", E, "+", i]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,  rhs: [i],          action: makeBoth }
+                  - { lhs: E,  rhs: [E, "+", E],  action: makeBoth }
+            lexer:
+              root:
+                - { symbol: i, match: "[0-9]+" }
+                - { symbol: "+", match: "\\+" }
+            """;
+
+        var (_, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0002");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Phase 3 / slice 2: visitor interface + BuildActions wiring
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void NoActions_EmitsNoVisitorFile()
+    {
+        // Already covered by NoActions_EmitsOnlySchemaFileNoAstFile (single tree =
+        // schema only) but assert here too to keep slice 2's contract local: with
+        // zero actions, the visitor surface is zero-method noise; don't emit it.
+        var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.DoesNotContain(trees, t => t.ToString().Contains("interface IVisitor", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Actions_EmitVisitorInterfaceAndBuildActions()
+    {
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.Equal(3, trees.Length); // schema + ast + visitor
+
+        var visitorSource = trees.Select(t => t.ToString())
+            .Single(src => src.Contains("interface IVisitor", StringComparison.Ordinal));
+
+        Assert.Contains("namespace MyApp;", visitorSource);
+        Assert.Contains("public static partial class Arithmetic", visitorSource);
+
+        // Interface methods: PascalCased action name, Item args, returns object.
+        Assert.Contains("object MakeNum(Item arg0);", visitorSource);
+        Assert.Contains("object MakeAdd(Item arg0, Item arg1, Item arg2);", visitorSource);
+
+        // BuildActions wiring: dictionary keys are the original camelCase action
+        // names (what SchemaCompiler looks up), method calls dispatch to the
+        // visitor with positional args[i].
+        Assert.Contains("BuildActions(IVisitor visitor)", visitorSource);
+        Assert.Contains("[\"makeNum\"] = (lhs, args) => visitor.MakeNum(args[0]),", visitorSource);
+        Assert.Contains("[\"makeAdd\"] = (lhs, args) => visitor.MakeAdd(args[0], args[1], args[2]),", visitorSource);
+    }
+
+    [Fact]
+    public async Task Actions_EndToEnd_StubVisitorParsesInput()
+    {
+        // The full slice-2 happy path: drive the generator on a grammar with
+        // actions, compile the three generated files together with a stub IVisitor
+        // implementation, load the assembly, call BuildActions(stub), feed the
+        // dictionary into SchemaCompiler.Compile, parse "12 + 34", and assert
+        // (a) the parse accepts and (b) the visitor methods got dispatched. This
+        // proves the entire chain — emitted visitor → generated wiring →
+        // SchemaCompiler → parser — works end to end.
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "GenVisit");
+        Assert.Empty(diags);
+        Assert.Equal(3, trees.Length);
+
+        const string stubSource = """
+            using System.Collections.Generic;
+            using CodeProject.Syntax.LALR.LexicalGrammar;
+
+            namespace GenVisit;
+
+            public sealed class StubVisitor : Arithmetic.IVisitor
+            {
+                public List<string> Calls { get; } = new();
+                public object MakeNum(Item arg0) { Calls.Add("makeNum:" + arg0.Content); return arg0; }
+                public object MakeAdd(Item arg0, Item arg1, Item arg2) { Calls.Add("makeAdd"); return arg0; }
+            }
+            """;
+
+        var allTrees = trees.Add(CSharpSyntaxTree.ParseText(stubSource,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        var references = new List<MetadataReference>
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(System.Collections.Generic.List<>).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(GrammarSchema).Assembly.Location),
+        };
+        foreach (var name in new[] { "System.Runtime", "System.Collections", "netstandard" })
+        {
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(Assembly.Load(name).Location));
+            }
+            catch { /* best-effort */ }
+        }
+
+        var compilation = CSharpCompilation.Create(
+            "GenVisitIntegration",
+            syntaxTrees: allTrees,
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var ms = new MemoryStream();
+        var emitResult = compilation.Emit(ms, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(emitResult.Success,
+            "visitor end-to-end compilation failed:\n  "
+            + string.Join("\n  ", emitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
+
+        ms.Position = 0;
+        var asm = Assembly.Load(ms.ToArray());
+
+        var arithmeticType = asm.GetType("GenVisit.Arithmetic")!;
+        var stubType = asm.GetType("GenVisit.StubVisitor")!;
+        var visitorInterface = arithmeticType.GetNestedType("IVisitor")!;
+
+        var stub = Activator.CreateInstance(stubType)!;
+        var schema = (GrammarSchema)arithmeticType.GetProperty("Schema")!.GetValue(null)!;
+
+        // BuildActions returns IReadOnlyDictionary<string, Func<int, Item[], object>>;
+        // SchemaCompiler.Compile asks for the same shape.
+        var buildActions = arithmeticType.GetMethod("BuildActions", new[] { visitorInterface })!;
+        var actions = (IReadOnlyDictionary<string, Func<int, Item[], object>>)buildActions.Invoke(null, new[] { stub })!;
+
+        var (grammar, lexerTable) = SchemaCompiler.Compile(schema, actions);
+        var parser = new Parser(grammar);
+        using var lexer = PipeBytesLexer.FromString("12 + 34", lexerTable,
+            cancellationToken: TestContext.Current.CancellationToken);
+        using var la = new AsyncLATokenIterator(lexer);
+        var debug = new Debug(parser, null, null);
+        var result = await parser.ParseInputAsync(la, debug,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(result.IsError);
+
+        // Visitor was actually dispatched: at least one MakeNum (per integer literal)
+        // and one MakeAdd (the binary op).
+        var calls = (List<string>)stubType.GetProperty("Calls")!.GetValue(stub)!;
+        Assert.Contains(calls, c => c.StartsWith("makeNum:", StringComparison.Ordinal));
+        Assert.Contains("makeAdd", calls);
+    }
+
+    [Fact]
+    public void Actions_SchemaAndAstFilesCompileTogether()
+    {
+        // Slice 1's compile-check, kept around as a smoke test for the combined
+        // emission. Slice 2 added the visitor file, so we now have three trees
+        // (schema + ast + visitor); they must all compile together without naming
+        // collisions or missing references.
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "GenAst");
+        Assert.Empty(diags);
+        Assert.Equal(3, trees.Length);
+
+        var references = new List<MetadataReference>
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(System.Collections.Generic.List<>).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(GrammarSchema).Assembly.Location),
+        };
+        foreach (var name in new[] { "System.Runtime", "System.Collections", "netstandard" })
+        {
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(Assembly.Load(name).Location));
+            }
+            catch { /* best-effort */ }
+        }
+
+        var compilation = CSharpCompilation.Create(
+            "GenAstIntegration",
+            syntaxTrees: trees,
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var compileDiags = compilation.GetDiagnostics(TestContext.Current.CancellationToken)
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        Assert.True(compileDiags.Count == 0,
+            "AST + schema files failed to compile together:\n  "
+            + string.Join("\n  ", compileDiags));
     }
 
     [Fact]
