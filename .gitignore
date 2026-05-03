@@ -229,3 +229,10 @@ _Pvt_Extensions
 
 # FAKE - F# Make
 .fake/
+
+# Claude Code session metadata
+.claude/
+
+# Modern editor configs (track per-project as needed)
+.vscode/
+.idea/

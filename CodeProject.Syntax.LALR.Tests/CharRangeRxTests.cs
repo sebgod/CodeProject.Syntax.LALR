@@ -1,26 +1,31 @@
-﻿using System;
+using System;
 using CodeProject.Syntax.LALR.LexicalGrammar;
-using NUnit.Framework;
+using Xunit;
 
-namespace CodeProject.Syntax.LALR.Tests
+namespace CodeProject.Syntax.LALR.Tests;
+
+public class CharRangeRxTests
 {
-    public class CharRangeRxTests
+    [Theory]
+    [InlineData('a', 'b', "a-b")]
+    [InlineData('a', 'a', "a")]
+    public void TestCharRangeRx(int a, int b, string expected)
     {
-        [TestCase('a', 'b', Result = "a-b")]
-        [TestCase('a', 'a', Result = "a")]
-        [TestCase('b', 'a', ExpectedException = typeof (ArgumentException))]
-        public string TestCharRangeRx(int a, int b)
-        {
-            return new CharRangeRx(a, b).PatternInsideClass;
-        }
+        Assert.Equal(expected, new CharRangeRx(a, b).PatternInsideClass);
+    }
 
-        [TestCase('a', 'b', ExpectedException = typeof (InvalidOperationException))]
-        [TestCase('a', 'a', ExpectedException = typeof (InvalidOperationException))]
-        [TestCase('b', 'a', ExpectedException = typeof (ArgumentException))]
-        public string TestCharRangeRxPatternException(int a, int b)
-        {
-            return new CharRangeRx(a, b).Pattern;
-        }
+    [Fact]
+    public void TestCharRangeRxThrowsWhenToSmallerThanFrom()
+    {
+        Assert.Throws<ArgumentException>(() => new CharRangeRx('b', 'a'));
+    }
 
+    [Theory]
+    [InlineData('a', 'b')]
+    [InlineData('a', 'a')]
+    public void TestCharRangeRxPatternThrows(int a, int b)
+    {
+        var range = new CharRangeRx(a, b);
+        Assert.Throws<InvalidOperationException>(() => range.Pattern);
     }
 }

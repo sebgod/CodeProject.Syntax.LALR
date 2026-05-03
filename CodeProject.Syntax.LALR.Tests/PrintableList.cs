@@ -1,29 +1,25 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-namespace CodeProject.Syntax.LALR.Tests
+namespace CodeProject.Syntax.LALR.Tests;
+
+internal class PrintableList<T> : List<T>
 {
-    class PrintableList<T> : List<T>
+    public PrintableList()
     {
-        public PrintableList()
-        {
-            // calls base constructor
-        }
-
-        public PrintableList(int count)
-            : base(count)
-        {
-            // calls base constructor
-        }
-
-        public PrintableList(IEnumerable<T> collection)
-            : base(collection)
-        {
-            // calls base constructor
-        }
-
-        public override string ToString()
-        {
-            return "[" + string.Join(", ", this) + "]";
-        }
+        // calls base constructor
     }
+
+    public PrintableList(int count)
+        : base(count)
+    {
+        // calls base constructor
+    }
+
+    public PrintableList(IEnumerable<T> collection)
+        : base(collection)
+    {
+        // calls base constructor
+    }
+
+    public override string ToString() => "[" + string.Join(", ", this) + "]";
 }

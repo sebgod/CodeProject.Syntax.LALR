@@ -1,38 +1,40 @@
-﻿using CodeProject.Syntax.LALR.LexicalGrammar;
-using NUnit.Framework;
+using CodeProject.Syntax.LALR.LexicalGrammar;
+using Xunit;
 
-namespace CodeProject.Syntax.LALR.Tests
+namespace CodeProject.Syntax.LALR.Tests;
+
+public class CharSequenceRxTests
 {
-    public class CharSequenceRxTests
+    [Theory]
+    [InlineData("abc", new int[] { 'a', 'b', 'c' })]
+    [InlineData(@"\\s", new int[] { '\\', 's' })]
+    [InlineData(@"\.\[", new int[] { '.', '[' })]
+    public void TestCharSequenceRx(string expected, int[] chars)
     {
-        [TestCase('a', 'b', 'c', Result = "abc")]
-        [TestCase('\\', 's', Result = @"\\s")]
-        [TestCase('.', '[', Result = @"\.\[")]
-        public string TestCharSequenceRx(params int[] chars)
-        {
-            return new CharSequenceRx(chars).Pattern;
-        }
+        Assert.Equal(expected, new CharSequenceRx(chars).Pattern);
+    }
 
-        [TestCase(null, Result = "")]
-        [TestCase(0, Result = "")]
-        [TestCase(1, Result = "\0")]
-        public string TestCharSequenceRxNullOrEmptyArray(int? size)
-        {
-            return new CharSequenceRx(size.HasValue ? new CharRx[size.Value] : null as CharRx[]).Pattern;
-        }
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData(0, "")]
+    [InlineData(1, "\0")]
+    public void TestCharSequenceRxNullOrEmptyArray(int? size, string expected)
+    {
+        Assert.Equal(expected, new CharSequenceRx(size.HasValue ? new CharRx[size.Value] : null as CharRx[]).Pattern);
+    }
 
-        [TestCase(+0, -1, "ab", Result = "(ab)*")]
-        [TestCase(+0, +1, "^𝒜𝓑$", Result = @"(\^\U0001D49C\U0001D4D1\$)?")]
-        [TestCase(+1, -1, @"\", Result = @"(\\)+")]
-        [TestCase(+1, +1, "x", Result = "x")]
-        [TestCase(+1, +2, "a", Result = "(a){1,2}")]
-        [TestCase(+1, +1, "", Result = "")]
-        [TestCase(+1, +2, "", Result = "(){1,2}")]
-        [TestCase(+1, +1, null, Result = "")]
-        [TestCase(+1, +2, null, Result = "(){1,2}")]
-        public string TestCharSequenceRxMultiplicity(int from, int to, string sequence)
-        {
-            return (((CharSequenceRx) sequence)*new Multiplicity(from, to)).Pattern;
-        }
+    [Theory]
+    [InlineData(+0, -1, "ab", "(ab)*")]
+    [InlineData(+0, +1, "^𝒜𝓑$", @"(\^\U0001D49C\U0001D4D1\$)?")]
+    [InlineData(+1, -1, @"\", @"(\\)+")]
+    [InlineData(+1, +1, "x", "x")]
+    [InlineData(+1, +2, "a", "(a){1,2}")]
+    [InlineData(+1, +1, "", "")]
+    [InlineData(+1, +2, "", "(){1,2}")]
+    [InlineData(+1, +1, null, "")]
+    [InlineData(+1, +2, null, "(){1,2}")]
+    public void TestCharSequenceRxMultiplicity(int from, int to, string sequence, string expected)
+    {
+        Assert.Equal(expected, (((CharSequenceRx)sequence) * new Multiplicity(from, to)).Pattern);
     }
 }

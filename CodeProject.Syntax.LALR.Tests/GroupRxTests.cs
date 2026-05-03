@@ -1,52 +1,52 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using CodeProject.Syntax.LALR.LexicalGrammar;
-using NUnit.Framework;
+using Xunit;
 
-namespace CodeProject.Syntax.LALR.Tests
+namespace CodeProject.Syntax.LALR.Tests;
+
+public class GroupRxTests
 {
-    public class GroupRxTests
+    [Fact]
+    public void TestGroupRxPreconditionsNullArray()
     {
-        [TestCase(null, ExpectedException = typeof (ArgumentNullException))]
-        public void TestGroupRxPreconditions(IRx[] items)
-        {
-            GC.KeepAlive(new GroupRx(Multiplicity.Once, items));
-        }
+        Assert.Throws<ArgumentNullException>(() => new GroupRx(Multiplicity.Once, null));
+    }
 
-        [Test]
-        public void TestGroupRxPreconditions()
-        {
-            Assert.That(() => new GroupRx(Multiplicity.Once), Throws.ArgumentException);
-        }
+    [Fact]
+    public void TestGroupRxPreconditionsEmpty()
+    {
+        Assert.Throws<ArgumentException>(() => new GroupRx(Multiplicity.Once));
+    }
 
-        [TestCaseSource("_groupSource")]
-        public string TestGroupMultiplicity(Multiplicity multiplicity, IList<IRx> exprs)
-        {
-            return new GroupRx(multiplicity, exprs.ToArray()).Pattern;
-        }
+    public static IEnumerable<object[]> GroupSource() =>
+    [
+        [Multiplicity.OneOrMore, Helper.Items(new CharRx('\\'), new CharRx('s')), @"(\\s)+"],
+        [Multiplicity.ZeroOrOnce, Helper.Items(new CharClassRx('a', 'b')), @"[ab]?"],
+        [new Multiplicity(1, 2), Helper.Items(new CharClassRx('a', 'b')), @"[ab]{1,2}"],
+        [Multiplicity.Once, Helper.Items(new CharRx('a')), "a"],
+        [Multiplicity.ZeroOrMore, Helper.Items(new CharRx('a')), "a*"],
+        [new Multiplicity(1, 2), Helper.Items(new CharRx('a')), "a{1,2}"],
+        [new Multiplicity(5), Helper.Items(new CharRx('a')), "a{5}"],
+        [new Multiplicity(5, -1), Helper.Items(new CharRx('a')), "a{5,}"],
+    ];
 
-        [TestCase(0, 'a', 'b', Result = "[ab]{0}")]
-        [TestCase(3, '\\', 's', Result = @"[\\s]{3}")]
-        [TestCase(7, 0x1D400, '-', Result = @"[\U0001D400\-]{7}")]
-        public string TestCharGroupMultiplicity(int times, int first, params int[] rest)
-        {
-            return (new CharClassRx(first, rest) * times).Pattern;
-        }
+    [Theory]
+    [MemberData(nameof(GroupSource))]
+    public void TestGroupMultiplicity(Multiplicity multiplicity, IList<IRx> exprs, string expected)
+    {
+        Assert.Equal(expected, new GroupRx(multiplicity, exprs.ToArray()).Pattern);
+    }
 
-        private readonly object[] _groupSource = new object[]
-            {
-                new TestCaseData(Multiplicity.OneOrMore, Helper.Items(new CharRx('\\'), new CharRx('s')))
-                    .Returns(@"(\\s)+"),
-                new TestCaseData(Multiplicity.ZeroOrOnce, Helper.Items(new CharClassRx('a', 'b')))
-                    .Returns(@"[ab]?"),
-                new TestCaseData(new Multiplicity(1, 2), Helper.Items(new CharClassRx('a', 'b')))
-                    .Returns(@"[ab]{1,2}"),
-                new TestCaseData(Multiplicity.Once, Helper.Items(new CharRx('a'))).Returns("a"),
-                new TestCaseData(Multiplicity.ZeroOrMore, Helper.Items(new CharRx('a'))).Returns("a*"),
-                new TestCaseData(new Multiplicity(1, 2), Helper.Items(new CharRx('a'))).Returns("a{1,2}"),
-                new TestCaseData(new Multiplicity(5), Helper.Items(new CharRx('a'))).Returns("a{5}"),
-                new TestCaseData(new Multiplicity(5, -1), Helper.Items(new CharRx('a'))).Returns("a{5,}")
-            };
+    [Theory]
+    [InlineData(0, "[ab]{0}", new int[] { 'a', 'b' })]
+    [InlineData(3, @"[\\s]{3}", new int[] { '\\', 's' })]
+    [InlineData(7, @"[\U0001D400\-]{7}", new int[] { 0x1D400, '-' })]
+    public void TestCharGroupMultiplicity(int times, string expected, int[] codepoints)
+    {
+        var first = codepoints[0];
+        var rest = codepoints.Skip(1).ToArray();
+        Assert.Equal(expected, (new CharClassRx(first, rest) * times).Pattern);
     }
 }

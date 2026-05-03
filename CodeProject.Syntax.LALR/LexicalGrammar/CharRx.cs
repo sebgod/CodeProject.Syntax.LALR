@@ -1,108 +1,64 @@
-﻿using System;
+using System;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace CodeProject.Syntax.LALR.LexicalGrammar
+namespace CodeProject.Syntax.LALR.LexicalGrammar;
+
+public readonly struct CharRx(int codepoint) : IEquatable<CharRx>, ISingleCharRx, IComparable<CharRx>
 {
-    public struct CharRx : IEquatable<CharRx>, ISingleCharRx, IComparable<CharRx>
+    private readonly int _codepoint = codepoint;
+
+    internal int Codepoint => _codepoint;
+
+    public static implicit operator CharRx(int codepoint) => new(codepoint);
+
+    public static CharSequenceRx operator +(CharRx a, CharRx b) => new(a, b);
+
+    public bool Equals(CharRx other) => _codepoint == other._codepoint;
+
+    public int CompareTo(CharRx other) => _codepoint.CompareTo(other._codepoint);
+
+    public override bool Equals(object obj) => obj is CharRx other && Equals(other);
+
+    public override int GetHashCode() => _codepoint;
+
+    public static bool operator ==(CharRx a, CharRx b) => a.Equals(b);
+
+    public static bool operator !=(CharRx a, CharRx b) => !(a == b);
+
+    public static bool operator <(CharRx a, CharRx b) => a.CompareTo(b) < 0;
+
+    public static bool operator >(CharRx a, CharRx b) => a.CompareTo(b) > 0;
+
+    public static bool operator <=(CharRx a, CharRx b) => a.CompareTo(b) <= 0;
+
+    public static bool operator >=(CharRx a, CharRx b) => a.CompareTo(b) >= 0;
+
+    public static GroupRx operator *(CharRx @this, Multiplicity multiplicity) => new(multiplicity, @this);
+
+    public static GroupRx operator *(CharRx @this, int times) => new(new Multiplicity(times), @this);
+
+    public override string ToString() => Pattern;
+
+    public string Pattern => _codepoint > char.MaxValue
+        ? $@"\U{_codepoint.ToString("X8", CultureInfo.InvariantCulture)}"
+        : Regex.Escape(char.ConvertFromUtf32(_codepoint));
+
+    public string PatternInsideClass
     {
-        private readonly int _codepoint;
-
-        public CharRx(int codepoint)
+        get
         {
-            _codepoint = codepoint;
-        }
-
-        public static implicit operator CharRx(int codepoint)
-        {
-            return new CharRx(codepoint);
-        }
-
-        public static CharSequenceRx operator +(CharRx a, CharRx b)
-        {
-            return new CharSequenceRx(a, b);
-        }
-
-        public bool Equals(CharRx other)
-        {
-            return _codepoint == other._codepoint;
-        }
-
-        public int CompareTo(CharRx other)
-        {
-            return _codepoint < other._codepoint ? -1 : _codepoint > other._codepoint ? 1 : 0;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is CharRx && Equals((CharRx) obj);
-        }
-
-        public override int GetHashCode()
-        {
-            return _codepoint;
-        }
-
-        public static bool operator ==(CharRx a, CharRx b)
-        {
-            return a.Equals(b);
-        }
-
-        public static bool operator !=(CharRx a, CharRx b)
-        {
-            return !(a == b);
-        }
-
-        public static bool operator <(CharRx a, CharRx b)
-        {
-            return a.CompareTo(b) < 0;
-        }
-
-        public static bool operator >(CharRx a, CharRx b)
-        {
-            return a.CompareTo(b) > 0;
-        }
-
-        public static GroupRx operator *(CharRx @this, Multiplicity multiplicity)
-        {
-            return new GroupRx(multiplicity, @this);
-        }
-
-        public static GroupRx operator *(CharRx @this, int times)
-        {
-            return new GroupRx(new Multiplicity(times), @this);
-        }
-
-        public override string ToString()
-        {
-            return Pattern;
-        }
-
-        public string Pattern
-        {
-            get
+            if (_codepoint > char.MaxValue)
             {
-                return _codepoint > char.MaxValue
-                      ? string.Format(@"\U{0}", _codepoint.ToString("X8"))
-                      : Regex.Escape(char.ConvertFromUtf32(_codepoint));
+                return $@"\U{_codepoint.ToString("X8", CultureInfo.InvariantCulture)}";
             }
-        }
-
-        public string PatternInsideClass
-        {
-            get
+            return _codepoint switch
             {
-                if (_codepoint > char.MaxValue)
-                {
-                    return string.Format(@"\U{0}", _codepoint.ToString("X8"));
-                }
-                switch (_codepoint)
-                {
-                    case '^': return @"\^";
-                    case '-': return @"\-";
-                    case '\\': return @"\\";
-                    default: return char.ConvertFromUtf32(_codepoint);
-                }
-            }
+                '^' => @"\^",
+                '-' => @"\-",
+                '\\' => @"\\",
+                _ => char.ConvertFromUtf32(_codepoint),
+            };
         }
     }
 }

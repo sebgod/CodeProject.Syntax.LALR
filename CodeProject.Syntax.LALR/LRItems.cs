@@ -1,136 +1,102 @@
 using System;
-namespace CodeProject.Syntax.LALR
+
+namespace CodeProject.Syntax.LALR;
+
+/// <summary>
+/// An item required for an LR0 Parser Construction
+/// </summary>
+public readonly struct LR0Item(int production, int position) : IEquatable<LR0Item>
 {
-    /// <summary>
-    /// An item required for an LR0 Parser Construction
-    /// </summary>
-    public struct LR0Item : IEquatable<LR0Item>
+    public int Production { get; } = production;
+
+    public int Position { get; } = position;
+
+    public override bool Equals(object obj)
     {
-        private readonly int _production;
-        private readonly int _position;
+        return obj is LR0Item item && Equals(item);
+    }
 
-        public int Production
-        {
-            get { return _production; }
-        }
-
-        public int Position
-        {
-            get { return _position; }
-        }
-
-        public LR0Item(int production, int position)
-        {
-            _production = production;
-            _position = position;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is LR0Item && Equals((LR0Item) obj);
-        }
-
-        public override int GetHashCode()
-        {
-            return (_production << 16) ^ _position;
-        }
-
-        public bool Equals(LR0Item item)
-        {
-            return (Production == item.Production) && (Position == item.Position);
-        }
-
-        public override string ToString()
-        {
-            return string.Format("production={0} position={1}", Production, Position);
-        }
-    };
-
-    /// <summary>
-    /// An item required for an LR1 Parser Construction
-    /// </summary>
-    public struct LR1Item : IEquatable<LR1Item>
+    public override int GetHashCode()
     {
-        private readonly int _lr0ItemID;
-        private readonly int _lookAhead;
+        return (Production << 16) ^ Position;
+    }
 
-        public int LR0ItemID
-        {
-            get { return _lr0ItemID; }
-        }
-
-        public int LookAhead
-        {
-            get { return _lookAhead; }
-        }
-
-        public LR1Item(int lr0ItemID, int lookAhead)
-        {
-            _lr0ItemID = lr0ItemID;
-            _lookAhead = lookAhead;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is LR1Item && Equals((LR1Item) obj);
-        }
-
-        public override int GetHashCode()
-        {
-            return (_lr0ItemID << 16) ^ _lookAhead;
-        }
-
-        public bool Equals(LR1Item item)
-        {
-            return (LR0ItemID == item.LR0ItemID) && (LookAhead == item.LookAhead);
-        }
-
-        public override string ToString()
-        {
-            return string.Format("LR0#={0} lookAhead={1}", LR0ItemID, LookAhead);
-        }
-    };
-
-    public struct LALRPropogation : IEquatable<LALRPropogation>
+    public bool Equals(LR0Item item)
     {
-        private readonly int _lr0TargetItem;
-        private readonly int _lr0TargetState;
+        return Production == item.Production && Position == item.Position;
+    }
 
-        public int LR0TargetState
-        {
-            get { return _lr0TargetState; }
-        }
+    public static bool operator ==(LR0Item left, LR0Item right) => left.Equals(right);
 
-        public int LR0TargetItem
-        {
-            get { return _lr0TargetItem; }
-        }
+    public static bool operator !=(LR0Item left, LR0Item right) => !left.Equals(right);
 
-        public LALRPropogation(int lr0TargetItem, int lr0TargetState)
-        {
-            _lr0TargetItem = lr0TargetItem;
-            _lr0TargetState = lr0TargetState;
-        }
+    public override string ToString()
+    {
+        return $"production={Production} position={Position}";
+    }
+}
 
-        public override bool Equals(object obj)
-        {
-            return obj is LALRPropogation && Equals((LALRPropogation) obj);
-        }
+/// <summary>
+/// An item required for an LR1 Parser Construction
+/// </summary>
+public readonly struct LR1Item(int lr0ItemID, int lookAhead) : IEquatable<LR1Item>
+{
+    public int LR0ItemID { get; } = lr0ItemID;
 
-        public override int GetHashCode()
-        {
-            return (LR0TargetState << 16) ^ LR0TargetItem;
-        }
+    public int LookAhead { get; } = lookAhead;
 
-        public bool Equals(LALRPropogation other)
-        {
-            return LR0TargetItem == other.LR0TargetItem && LR0TargetState == other.LR0TargetState;
-        }
+    public override bool Equals(object obj)
+    {
+        return obj is LR1Item item && Equals(item);
+    }
 
-        public override string ToString()
-        {
-            return string.Format("LR0 target={0} state={1}", LR0TargetItem, LR0TargetState);
-        }
-    };
+    public override int GetHashCode()
+    {
+        return (LR0ItemID << 16) ^ LookAhead;
+    }
 
+    public bool Equals(LR1Item item)
+    {
+        return LR0ItemID == item.LR0ItemID && LookAhead == item.LookAhead;
+    }
+
+    public static bool operator ==(LR1Item left, LR1Item right) => left.Equals(right);
+
+    public static bool operator !=(LR1Item left, LR1Item right) => !left.Equals(right);
+
+    public override string ToString()
+    {
+        return $"LR0#={LR0ItemID} lookAhead={LookAhead}";
+    }
+}
+
+public readonly struct LALRPropogation(int lr0TargetItem, int lr0TargetState) : IEquatable<LALRPropogation>
+{
+    public int LR0TargetState { get; } = lr0TargetState;
+
+    public int LR0TargetItem { get; } = lr0TargetItem;
+
+    public override bool Equals(object obj)
+    {
+        return obj is LALRPropogation prop && Equals(prop);
+    }
+
+    public override int GetHashCode()
+    {
+        return (LR0TargetState << 16) ^ LR0TargetItem;
+    }
+
+    public bool Equals(LALRPropogation other)
+    {
+        return LR0TargetItem == other.LR0TargetItem && LR0TargetState == other.LR0TargetState;
+    }
+
+    public static bool operator ==(LALRPropogation left, LALRPropogation right) => left.Equals(right);
+
+    public static bool operator !=(LALRPropogation left, LALRPropogation right) => !left.Equals(right);
+
+    public override string ToString()
+    {
+        return $"LR0 target={LR0TargetItem} state={LR0TargetState}";
+    }
 }

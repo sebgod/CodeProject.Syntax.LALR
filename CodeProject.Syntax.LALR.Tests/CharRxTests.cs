@@ -1,73 +1,78 @@
-﻿using CodeProject.Syntax.LALR.LexicalGrammar;
-using NUnit.Framework;
+using CodeProject.Syntax.LALR.LexicalGrammar;
+using Xunit;
 
-namespace CodeProject.Syntax.LALR.Tests
+namespace CodeProject.Syntax.LALR.Tests;
+
+public class CharRxTests
 {
-    public class CharRxTests
+    [Theory]
+    [InlineData('a', "a")]
+    [InlineData('s', "s")]
+    [InlineData('\\', @"\\")]
+    [InlineData('.', @"\.")]
+    [InlineData('^', @"\^")]
+    [InlineData('$', @"\$")]
+    [InlineData('*', @"\*")]
+    [InlineData('+', @"\+")]
+    [InlineData('-', "-")]
+    [InlineData('?', @"\?")]
+    [InlineData('(', @"\(")]
+    [InlineData(')', @"\)")]
+    [InlineData('{', @"\{")]
+    [InlineData('}', "}")]
+    [InlineData('[', @"\[")]
+    [InlineData(']', "]")]
+    [InlineData('|', @"\|")]
+    [InlineData(0x1D400, @"\U0001D400")]
+    public void TestCharRx(int cp, string expected)
     {
-        [TestCase('a', Result = "a")]
-        [TestCase('s', Result = @"s")]
-        [TestCase('\\', Result = @"\\")]
-        [TestCase('.', Result = @"\.")]
-        [TestCase('^', Result = @"\^")]
-        [TestCase('$', Result = @"\$")]
-        [TestCase('*', Result = @"\*")]
-        [TestCase('+', Result = @"\+")]
-        [TestCase('-', Result = "-")]
-        [TestCase('?', Result = @"\?")]
-        [TestCase('(', Result = @"\(")]
-        [TestCase(')', Result = @"\)")]
-        [TestCase('{', Result = @"\{")]
-        [TestCase('}', Result = "}")]
-        [TestCase('[', Result = @"\[")]
-        [TestCase(']', Result = "]")]
-        [TestCase('|', Result = @"\|")]
-        [TestCase(0x1D400, Result = @"\U0001D400")]
-        public string TestCharRx(int cp)
-        {
-            return new CharRx(cp).Pattern;
-        }
+        Assert.Equal(expected, new CharRx(cp).Pattern);
+    }
 
-        [TestCase('a', 'b', Result = false)]
-        [TestCase('a', 'a', Result = true)]
-        [TestCase('b', 'a', Result = false)]
-        public bool TestCharRxEquality(int a, int b)
-        {
-            return new CharRx(a) == b;
-        }
+    [Theory]
+    [InlineData('a', 'b', false)]
+    [InlineData('a', 'a', true)]
+    [InlineData('b', 'a', false)]
+    public void TestCharRxEquality(int a, int b, bool expected)
+    {
+        Assert.Equal(expected, new CharRx(a) == b);
+    }
 
-        [TestCase('a', 'b', Result = false)]
-        [TestCase('a', 'a', Result = true)]
-        public bool TestCharRxObjectEquality(int a, int b)
-        {
-// ReSharper disable SuspiciousTypeConversion.Global
-            return new CharRx(a).Equals((object) (CharRx) b);
-// ReSharper restore SuspiciousTypeConversion.Global
-        }
+    [Theory]
+    [InlineData('a', 'b', false)]
+    [InlineData('a', 'a', true)]
+    public void TestCharRxObjectEquality(int a, int b, bool expected)
+    {
+        Assert.Equal(expected, new CharRx(a).Equals((object)(CharRx)b));
+    }
 
-        [TestCase('a', 'b', Result = true)]
-        [TestCase('a', 'a', Result = true, Description = "Circumvent implicit conversation from int")]
-        [TestCase('=', "=", Result = true, Description = "string can not be implicitly cast to a codepoint")]
-        [TestCase('b', null, Result = true)]
-        public bool TestCharRxObjectInEquality(int a, object b)
-        {
-            return !new CharRx(a).Equals(b);
-        }
+    [Theory]
+    [InlineData('a', 'b', true)]
+    // Circumvent implicit conversion from int — comparing CharRx against a char (boxed as int).
+    [InlineData('a', 'a', true)]
+    // string can not be implicitly cast to a codepoint, so equality is false.
+    [InlineData('=', "=", true)]
+    [InlineData('b', null, true)]
+    public void TestCharRxObjectInEquality(int a, object b, bool expected)
+    {
+        Assert.Equal(expected, !new CharRx(a).Equals(b));
+    }
 
-        [TestCase('a', 'b', Result = true)]
-        [TestCase('a', 'a', Result = false)]
-        [TestCase('b', 'a', Result = true)]
-        public bool TestCharRxInEquality(int a, int b)
-        {
-            return new CharRx(a) != b;
-        }
+    [Theory]
+    [InlineData('a', 'b', true)]
+    [InlineData('a', 'a', false)]
+    [InlineData('b', 'a', true)]
+    public void TestCharRxInEquality(int a, int b, bool expected)
+    {
+        Assert.Equal(expected, new CharRx(a) != b);
+    }
 
-        [TestCase(0, 'a', Result = "a{0}")]
-        [TestCase(3, '\\', Result = @"\\{3}")]
-        [TestCase(7, 0x1D400, Result = @"\U0001D400{7}")]
-        public string TestCharMultiplicity(int times, int codepoint)
-        {
-            return (((CharRx)codepoint) * times).Pattern;
-        }
+    [Theory]
+    [InlineData(0, 'a', "a{0}")]
+    [InlineData(3, '\\', @"\\{3}")]
+    [InlineData(7, 0x1D400, @"\U0001D400{7}")]
+    public void TestCharMultiplicity(int times, int codepoint, string expected)
+    {
+        Assert.Equal(expected, (((CharRx)codepoint) * times).Pattern);
     }
 }

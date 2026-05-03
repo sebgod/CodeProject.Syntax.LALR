@@ -1,52 +1,40 @@
 using System.Threading.Tasks;
 
-namespace CodeProject.Syntax.LALR.LexicalGrammar
+namespace CodeProject.Syntax.LALR.LexicalGrammar;
+
+public class AsyncLATokenIterator(IAsyncIterator<Item> inputSource) : IAsyncLAIterator<Item>
 {
-    public class AsyncLATokenIterator : IAsyncLAIterator<Item>
+    private readonly IAsyncIterator<Item> _inputSource = inputSource;
+    private Item _lookAhead;
+
+    public async Task<Item> LookAheadAsync()
     {
-        private readonly IAsyncIterator<Item> _inputSource;
-        private Item _lookAhead;
+        return _lookAhead ??= await _inputSource.MoveNextAsync() ? await CurrentAsync() : Item.EOF;
+    }
 
-        public AsyncLATokenIterator(IAsyncIterator<Item> inputSource)
-        {
-            _inputSource = inputSource;
-        }
+    public async Task<Item> CurrentAsync() => await _inputSource.CurrentAsync();
 
-        public async Task<Item> LookAheadAsync()
-        {
-            return _lookAhead ?? (_lookAhead = await _inputSource.MoveNextAsync() ? await CurrentAsync() : Item.EOF);
-        }
-
-        public async Task<Item> CurrentAsync()
-        {
-            return await _inputSource.CurrentAsync();
-        }
-
-        public async Task<bool> MoveNextAsync()
-        {
-            if (_lookAhead != null)
-            {
-                _lookAhead = null;
-                return true;
-            }
-            return await _inputSource.MoveNextAsync();
-        }
-
-        public void Reset()
+    public async Task<bool> MoveNextAsync()
+    {
+        if (_lookAhead != null)
         {
             _lookAhead = null;
-            _inputSource.Reset();
+            return true;
         }
+        return await _inputSource.MoveNextAsync();
+    }
 
-        public bool SupportsResetting
-        {
-            get { return _inputSource.SupportsResetting; }
-        }
+    public void Reset()
+    {
+        _lookAhead = null;
+        _inputSource.Reset();
+    }
 
-        public void Dispose()
-        {
-            _lookAhead = null;
-            _inputSource.Dispose();
-        }
+    public bool SupportsResetting => _inputSource.SupportsResetting;
+
+    public void Dispose()
+    {
+        _lookAhead = null;
+        _inputSource.Dispose();
     }
 }

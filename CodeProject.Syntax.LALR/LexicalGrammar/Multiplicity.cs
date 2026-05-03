@@ -1,100 +1,89 @@
-﻿using System;
+using System;
 
-namespace CodeProject.Syntax.LALR.LexicalGrammar
+namespace CodeProject.Syntax.LALR.LexicalGrammar;
+
+public readonly struct Multiplicity : IEquatable<Multiplicity>, IRx
 {
-    public struct Multiplicity : IEquatable<Multiplicity>, IRx
+    public static readonly Multiplicity ZeroOrMore = new(0, -1);
+    public static readonly Multiplicity ZeroOrOnce = new(0, 1);
+    public static readonly Multiplicity OneOrMore = new(1, -1);
+    public static readonly Multiplicity Once = new(1);
+
+    private readonly int _from;
+    private readonly int _to;
+
+    public Multiplicity(int times)
+        : this(times, times)
     {
-        public static readonly Multiplicity ZeroOrMore = new Multiplicity(0, -1);
-        public static readonly Multiplicity ZeroOrOnce = new Multiplicity(0, 1);
-        public static readonly Multiplicity OneOrMore = new Multiplicity(1, -1);
-        public static readonly Multiplicity Once = new Multiplicity(1);
+        // call Multiplicity(int from, int to)
+    }
 
-        private readonly int _from;
-        private readonly int _to;
-
-        public Multiplicity(int times)
-            : this(times, times)
+    public Multiplicity(int from, int to)
+    {
+        if (from < 0)
         {
-            // call Multiplicity(int from, int to)
+            throw new ArgumentException("From must be >= 0: " + from, nameof(from));
         }
-        public Multiplicity(int from, int to)
+        if (to != -1 && to < from)
         {
-            if (from < 0)
+            throw new ArgumentException("To must be >= to, if not unbound: " + to, nameof(to));
+        }
+
+        _from = from;
+        _to = to;
+    }
+
+    internal int From => _from;
+    internal int To => _to;
+
+    public bool Equals(Multiplicity other)
+    {
+        return _from == other._from && _to == other._to;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is Multiplicity other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return (_to.GetHashCode() << 11) ^ _from.GetHashCode();
+    }
+
+    public static bool operator ==(Multiplicity a, Multiplicity b) => a.Equals(b);
+
+    public static bool operator !=(Multiplicity a, Multiplicity b) => !(a == b);
+
+    public string Pattern
+    {
+        get
+        {
+            if (_from == _to)
             {
-                throw new ArgumentException("From must be >= 0: " + from, "from");
+                return _from switch
+                {
+                    1 => "",
+                    _ => $"{{{_from}}}",
+                };
             }
-            if (to != -1 && to < from)
+
+            return _to switch
             {
-                throw new ArgumentException("To must be >= to, if not unbound: " + to, "to");
-            }
-
-            _from = from;
-            _to = to;
-        }
-
-        public bool Equals(Multiplicity other)
-        {
-            return _from == other._from && _to == other._to;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is Multiplicity && Equals((Multiplicity) obj);
-        }
-
-        public override int GetHashCode()
-        {
-            return (_to.GetHashCode() << 11) ^ _from.GetHashCode();
-        }
-
-        public static bool operator ==(Multiplicity a, Multiplicity b)
-        {
-            return a.Equals(b);
-        }
-
-        public static bool operator !=(Multiplicity a, Multiplicity b)
-        {
-            return !(a == b);
-        }
-
-        public string Pattern
-        {
-            get {
-                if (_from == _to)
+                -1 => _from switch
                 {
-                    switch (_from)
-                    {
-                        case 1:
-                            return "";
-                        default:
-                            return string.Format("{{{0}}}", _from);
-                    }
-                }
-
-                switch (_to)
-                {
-                    case -1:
-                        switch (_from)
-                        {
-                            case 0:
-                                return "*";
-                            case 1:
-                                return "+";
-                            default:
-                                return string.Format("{{{0},}}", _from);
-                        }
-                    case 1:
-                        return "?";
-
-                    default:
-                        return string.Format("{{{0},{1}}}", _from, _to);
-                }
-            }
+                    0 => "*",
+                    1 => "+",
+                    _ => $"{{{_from},}}",
+                },
+                1 => "?",
+                _ => $"{{{_from},{_to}}}",
+            };
         }
+    }
 
-        public override string ToString()
-        {
-            return Pattern;
-        }
+    public override string ToString()
+    {
+        return Pattern;
     }
 }

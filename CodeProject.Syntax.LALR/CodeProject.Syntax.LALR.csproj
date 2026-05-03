@@ -1,62 +1,15 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <ProjectTypeGuids>{786C830F-07A1-408B-BD7F-6EE04809D6DB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>10.0.0</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{AFE70FCA-47E6-4DC0-9138-3826E565AE6A}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>CodeProject.Syntax.LALR</RootNamespace>
     <AssemblyName>CodeProject.Syntax.LALR</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <TargetFrameworkProfile>Profile7</TargetFrameworkProfile>
-    <MinimumVisualStudioVersion>11.0</MinimumVisualStudioVersion>
+    <AssemblyTitle>CodeProject.Syntax.LALR</AssemblyTitle>
+    <Description>LALR Parse Table Generation in C#</Description>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <Version>2.0.0</Version>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug</OutputPath>
-    <DefineConstants>DEBUG</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>none</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Release</OutputPath>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.cs" />
-    <Compile Include="LexicalGrammar\AsyncEnumerableWrapper.cs" />
-    <Compile Include="LexicalGrammar\AsyncRegexLexer.cs" />
-    <Compile Include="LexicalGrammar\CharClassRx.cs" />
-    <Compile Include="LexicalGrammar\CharRangeRx.cs" />
-    <Compile Include="LexicalGrammar\CharSequenceRx.cs" />
-    <Compile Include="LexicalGrammar\GroupRx.cs" />
-    <Compile Include="LexicalGrammar\ISingleCharRx.cs" />
-    <Compile Include="LexicalGrammar\Multiplicity.cs" />
-    <Compile Include="LexicalGrammar\SymbolName.cs" />
-    <Compile Include="Utilities\BoxDrawing.cs" />
-    <Compile Include="Debug.cs" />
-    <Compile Include="Grammar.cs" />
-    <Compile Include="IAsyncIterator.cs" />
-    <Compile Include="IAsyncLAIterator.cs" />
-    <Compile Include="LexicalGrammar\AsyncLACharIterator.cs" />
-    <Compile Include="LexicalGrammar\AsyncLATokenIterator.cs" />
-    <Compile Include="LexicalGrammar\CharRx.cs" />
-    <Compile Include="LRItems.cs" />
-    <Compile Include="Parser.cs" />
-    <Compile Include="ParseTable.cs" />
-    <Compile Include="LexicalGrammar\Item.cs" />
-  </ItemGroup>
-  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
+
 </Project>

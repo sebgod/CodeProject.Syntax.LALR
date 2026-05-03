@@ -1,81 +1,88 @@
-﻿using System;
-using CodeProject.Syntax.LALR.LexicalGrammar;
-using NUnit.Framework;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using CodeProject.Syntax.LALR.LexicalGrammar;
+using Xunit;
 
-namespace CodeProject.Syntax.LALR.Tests
+namespace CodeProject.Syntax.LALR.Tests;
+
+public class MultiplicityTests
 {
-    public class MultiplicityTests
+    [Theory]
+    [InlineData(+0, -1, "*")]
+    [InlineData(+0, +1, "?")]
+    [InlineData(+1, -1, "+")]
+    [InlineData(+1, +1, "")]
+    [InlineData(+1, +2, "{1,2}")]
+    [InlineData(+2, -1, "{2,}")]
+    [InlineData(+2, +4, "{2,4}")]
+    [InlineData(+3, +3, "{3}")]
+    public void TestMultiplicity(int from, int to, string expected)
     {
-        [TestCase(-1, -1, ExpectedException = typeof (ArgumentException))]
-        [TestCase(-1, +0, ExpectedException = typeof (ArgumentException))]
-        [TestCase(-1, -2, ExpectedException = typeof (ArgumentException))]
-        [TestCase(+3, -2, ExpectedException = typeof (ArgumentException))]
-        [TestCase(+0, -1, Result = "*")]
-        [TestCase(+0, +1, Result = "?")]
-        [TestCase(+1, -1, Result = "+")]
-        [TestCase(+1, +1, Result = "")]
-        [TestCase(+1, +2, Result = "{1,2}")]
-        [TestCase(+2, -1, Result = "{2,}")]
-        [TestCase(+2, +4, Result = "{2,4}")]
-        [TestCase(+3, +3, Result = "{3}")]
-        public string TestMultiplicity(int from, int to)
+        Assert.Equal(expected, new Multiplicity(from, to).Pattern);
+    }
+
+    [Theory]
+    [InlineData(-1, -1)]
+    [InlineData(-1, +0)]
+    [InlineData(-1, -2)]
+    [InlineData(+3, -2)]
+    public void TestMultiplicityInvalidThrows(int from, int to)
+    {
+        Assert.Throws<ArgumentException>(() => new Multiplicity(from, to));
+    }
+
+    [Fact]
+    public void TestMultiplicityEquality()
+    {
+        var setConstants = new HashSet<Multiplicity>(new[]
         {
-            return new Multiplicity(from, to).Pattern;
-        }
-
-        [Test]
-        public void TestMultiplicityEquality()
+            Multiplicity.OneOrMore, Multiplicity.ZeroOrMore,
+            Multiplicity.Once, Multiplicity.ZeroOrOnce,
+        });
+        var unionWithEquivalent = new HashSet<Multiplicity>(setConstants).Union(new[]
         {
-            var setConstants = new HashSet<Multiplicity>(new[]
-                {
-                    Multiplicity.OneOrMore, Multiplicity.ZeroOrMore,
-                    Multiplicity.Once, Multiplicity.ZeroOrOnce
-                });
-            var unionWithEquivalent = new HashSet<Multiplicity>(setConstants).Union(new[]
-                {
-                    new Multiplicity(1, -1),
-                    new Multiplicity(0, -1), new Multiplicity(1), new Multiplicity(1, -1)
-                });
+            new Multiplicity(1, -1),
+            new Multiplicity(0, -1), new Multiplicity(1), new Multiplicity(1, -1),
+        });
 
-            Assert.That(setConstants, Is.EquivalentTo(unionWithEquivalent));
-        }
+        Assert.Equal(setConstants.OrderBy(p => p.Pattern), unionWithEquivalent.OrderBy(p => p.Pattern));
+    }
 
-        [Test]
-        public void TestMultiplicityEqualityObject()
+    [Fact]
+    public void TestMultiplicityEqualityObject()
+    {
+        var dummy = new object();
+        var setConstants = new HashSet<object>(new object[]
         {
-            var dummy = new object();
-            var setConstants = new HashSet<object>(new[]
-                {
-                    Multiplicity.OneOrMore, Multiplicity.ZeroOrMore,
-                    Multiplicity.Once, Multiplicity.ZeroOrOnce, dummy
-                });
-            var unionWithEquivalent = new HashSet<object>(setConstants).Union(new[]
-                {
-                    new Multiplicity(1, -1),
-                    new Multiplicity(0, -1), new Multiplicity(1), new Multiplicity(1, -1), dummy
-                });
-
-            Assert.That(setConstants, Is.EquivalentTo(unionWithEquivalent));
-        }
-
-        [Test]
-        public void TestMultiplicityInEqualityObject()
+            Multiplicity.OneOrMore, Multiplicity.ZeroOrMore,
+            Multiplicity.Once, Multiplicity.ZeroOrOnce, dummy,
+        });
+        var unionWithEquivalent = new HashSet<object>(setConstants).Union(new object[]
         {
-            Assert.That(Multiplicity.OneOrMore.Equals(new object()), Is.False);
-        }
+            new Multiplicity(1, -1),
+            new Multiplicity(0, -1), new Multiplicity(1), new Multiplicity(1, -1), dummy,
+        });
 
-        [Test]
-        public void TestMultiplicityInEquality()
-        {
-            Assert.That(Multiplicity.Once, Is.Not.EqualTo(Multiplicity.ZeroOrMore));
-        }
+        Assert.Equal(setConstants.Count, unionWithEquivalent.Count());
+        Assert.True(setConstants.SetEquals(unionWithEquivalent));
+    }
 
-        [Test]
-        public void TestMultiplicityInEqualityOp()
-        {
-            Assert.That(Multiplicity.Once != Multiplicity.ZeroOrMore, Is.True);
-        }
+    [Fact]
+    public void TestMultiplicityInEqualityObject()
+    {
+        Assert.False(Multiplicity.OneOrMore.Equals(new object()));
+    }
+
+    [Fact]
+    public void TestMultiplicityInEquality()
+    {
+        Assert.NotEqual(Multiplicity.Once, Multiplicity.ZeroOrMore);
+    }
+
+    [Fact]
+    public void TestMultiplicityInEqualityOp()
+    {
+        Assert.True(Multiplicity.Once != Multiplicity.ZeroOrMore);
     }
 }
