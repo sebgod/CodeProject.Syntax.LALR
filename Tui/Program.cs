@@ -20,7 +20,11 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace CodeProject.Syntax.LALR.Tui;
 
-internal enum View { Grammar = 1, Lexer = 2, Tokens = 3, Input = 4, Tree = 5 }
+// Three-pane layout: schema (grammar+lexer) on the left, input in the middle,
+// parse tree on the right. Focus determines which pane consumes keystrokes
+// (Tab / Shift+Tab cycle; mouse click on a pane focuses it). All three render
+// every frame, so edits in the middle pane visibly propagate to the right.
+internal enum Focus { Schema = 0, Input = 1, Tree = 2 }
 
 internal static class Program
 {
@@ -139,54 +143,48 @@ internal static class Program
         string? compileError,
         string? parserError)
     {
-        var view = View.Grammar;
-        var lastNonInputView = View.Grammar;     // remembered so Esc from Input returns where we were
+        var focus = Focus.Input;     // input is the workflow's natural starting point
         var panel = new CL.Panel(term);
         var headerVp = panel.Dock(DockStyle.Top, 1);
         var statusVp = panel.Dock(DockStyle.Bottom, 1);
         var helpVp   = panel.Dock(DockStyle.Bottom, 1);
-        var bodyVp   = panel.Fill();
+        // Three-column body. Sizes are cell-cols; the middle pane gets the
+        // remainder via Fill so it expands on wider terminals.
+        var schemaVp = panel.Dock(DockStyle.Left, 36);
+        var parseVp  = panel.Dock(DockStyle.Right, 40);
+        var inputVp  = panel.Fill();
 
         var header = new CL.TextBar(headerVp);
         var status = new CL.TextBar(statusVp);
         var help   = new CL.TextBar(helpVp);
 
-        // Five view widgets share the body viewport — only one is rendered at
-        // a time. Constructors don't render, so building the unused ones is
-        // cheap and keeps state across view switches (cursor / scroll position).
-        var grammarTree = new CL.TreeView<Node>(bodyVp);
-        grammarTree.Header(" precedence groups · productions · symbols");
-        grammarTree.Root(GrammarRoot.Build(schema, grammar), expandRoot: true);
-
-        var lexerTree = new CL.TreeView<Node>(bodyVp);
-        lexerTree.Header(" lexer state · symbol  pattern  instruction");
-        lexerTree.Root(LexerRoot.Build(schema, grammar, lexer), expandRoot: true);
-
-        var tokenList = new CL.ScrollableList<TokenRow>(bodyVp);
-        tokenList.Header(" #     line:col  symbol               content");
+        // Unified schema tree: grammar and lexer live side-by-side under one
+        // synthetic root, each half collapsible independently.
+        var schemaTree = new CL.TreeView<Node>(schemaVp);
+        schemaTree.Header(" schema");
+        schemaTree.Root(SchemaRoot.Build(schema, grammar, lexer), expandRoot: true);
 
         var textState = new CL.TextAreaState(initialInputText);
-        var textArea = new CL.TextArea(bodyVp);
+        var textArea = new CL.TextArea(inputVp);
         textArea.State = textState;
 
-        var parseTree = new CL.TreeView<Node>(bodyVp);
-        parseTree.Header(" parse tree (root → reductions → tokens)");
+        var parseTree = new CL.TreeView<Node>(parseVp);
+        parseTree.Header(" parse tree");
 
         // Re-tokenizes and re-parses from the current TextAreaState contents.
-        // Both tokens and parse tree are derived from the same byte buffer so
-        // edits in the Input view immediately propagate to the other views.
-        var tokens = new List<TokenRow>();
+        // The tokens count surfaces in the status bar; the parse tree is the
+        // canonical view of the structure (token leaves are visible there).
+        var tokenCount = 0;
         string? tokenError = null;
         string? parseError = null;
         async Task RebuildAsync()
         {
-            tokens.Clear();
+            tokenCount = 0;
             tokenError = null;
             parseError = null;
             if (lexer.Count == 0)
             {
                 parseTree.Root(ParseTreeRoot.Build(null, grammar, "no lexer"), expandRoot: true);
-                tokenList.Items(tokens);
                 return;
             }
             // Zero-alloc input feed: build a 2-segment ReadOnlySequence<byte>
@@ -199,10 +197,9 @@ internal static class Program
             var seq = JoinSegments(textState.MemoryBeforeGap, textState.MemoryAfterGap);
             try
             {
-                tokens.AddRange(await TokenizeSequenceAsync(seq, lexer, grammar));
+                tokenCount = await CountTokensAsync(seq, lexer);
             }
             catch (Exception ex) { tokenError = ex.Message; }
-            tokenList.Items(tokens);
 
             if (parser is null)
             {
@@ -229,6 +226,11 @@ internal static class Program
         // Initial fill so all views have content from the seed buffer.
         await RebuildAsync();
 
+        // Bright header style for the focused pane; dim header for the rest.
+        // Helps the eye land on the active pane without changing the layout.
+        var focusedHeader   = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Blue);
+        var unfocusedHeader = new CL.VtStyle(CL.SgrColor.BrightBlack, CL.SgrColor.Black);
+
         void RenderHeader()
         {
             var leftSb = new StringBuilder();
@@ -236,15 +238,13 @@ internal static class Program
             leftSb.Append("  · ").Append(schema.Symbols?.Count ?? 0).Append(" symbols");
             leftSb.Append(" · ").Append(schema.Productions?.Count ?? 0).Append(" groups");
             if (schema.Lexer is { Count: > 0 } l) leftSb.Append(" · ").Append(l.Count).Append(" lex states");
-            var right = view switch
+            var right = focus switch
             {
-                View.Grammar => "F1·[grammar] F2·lexer F3·tokens F4·input F5·tree",
-                View.Lexer   => "F1·grammar F2·[lexer] F3·tokens F4·input F5·tree",
-                View.Tokens  => "F1·grammar F2·lexer F3·[tokens] F4·input F5·tree",
-                View.Input   => "F1·grammar F2·lexer F3·tokens F4·[input] F5·tree",
-                View.Tree    => "F1·grammar F2·lexer F3·tokens F4·input F5·[tree]",
+                Focus.Schema => "[schema]·input·tree ",
+                Focus.Input  => "schema·[input]·tree ",
+                Focus.Tree   => "schema·input·[tree] ",
                 _            => "",
-            } + " ";
+            };
             header
                 .Text(leftSb.ToString())
                 .RightText(right)
@@ -261,32 +261,28 @@ internal static class Program
                 text = " compile error: " + compileError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
-            else if (parserError != null && (view == View.Tree || view == View.Input))
+            else if (parserError != null)
             {
                 text = " " + parserError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
-            else if (view == View.Tokens && tokenError != null)
+            else if (tokenError != null)
             {
                 text = " tokenize error: " + tokenError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
-            else if (view == View.Tree && parseError != null)
+            else if (parseError != null)
             {
                 text = " parse error: " + parseError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
             else
             {
-                text = view switch
+                text = focus switch
                 {
-                    View.Grammar => $" {grammarTree.CursorIndex + 1}/{Math.Max(1, grammarTree.ItemCount)}  {NodeTitle(grammarTree.Selected)}",
-                    View.Lexer   => $" {lexerTree.CursorIndex + 1}/{Math.Max(1, lexerTree.ItemCount)}  {NodeTitle(lexerTree.Selected)}",
-                    View.Tokens  => tokens.Count == 0
-                        ? " (no tokens — buffer is empty or lexer rejected the first byte)"
-                        : $" {tokenList.CursorIndex + 1}/{tokens.Count}  tokens",
-                    View.Input   => FormatInputStatus(textState, tokens.Count),
-                    View.Tree    => $" {parseTree.CursorIndex + 1}/{Math.Max(1, parseTree.ItemCount)}  {NodeTitle(parseTree.Selected)}",
+                    Focus.Schema => $" schema  {schemaTree.CursorIndex + 1}/{Math.Max(1, schemaTree.ItemCount)}  {NodeTitle(schemaTree.Selected)}",
+                    Focus.Input  => FormatInputStatus(textState, tokenCount),
+                    Focus.Tree   => $" tree    {parseTree.CursorIndex + 1}/{Math.Max(1, parseTree.ItemCount)}  {NodeTitle(parseTree.Selected)}",
                     _            => "",
                 };
                 style = new CL.VtStyle(CL.SgrColor.White, CL.SgrColor.BrightBlack);
@@ -296,43 +292,41 @@ internal static class Program
 
         void RenderHelp()
         {
-            // Input mode has different keybindings (typing vs navigation), so the
-            // help line swaps to match. Esc always returns to the previous view
-            // when in Input mode, never quits — Ctrl+C handles abort.
-            var line = view == View.Input
-                ? " [F1..F5] view  [Esc] back  [↑/↓/←/→] move  [Home/End] line  [PgUp/PgDn] page  [Backspace/Del] erase  type to insert"
-                : " [F1] grammar  [F2] lexer  [F3] tokens  [F4] input  [F5] tree  [Tab] cycle  [↑/↓] move  [←/→] coll/expand  [q] quit";
+            // Help line is focus-sensitive because the dispatched keys differ:
+            // text-input pane consumes printable bytes whereas the trees use
+            // the same printable keys for navigation/quit.
+            var line = focus == Focus.Input
+                ? " [Tab] next pane  [Shift+Tab] prev  [↑/↓/←/→] move  [Home/End] line  [PgUp/PgDn] page  [Backspace/Del] erase  type to insert  [Ctrl+C] quit"
+                : " [Tab] next pane  [Shift+Tab] prev  [↑/↓] move  [←/→] collapse/expand  [Home/End] document  [PgUp/PgDn] page  [q] quit";
             help
                 .Text(line)
                 .Style(new CL.VtStyle(CL.SgrColor.BrightBlack, CL.SgrColor.Black))
                 .Render();
         }
 
-        void RenderBody()
+        void RenderPanes()
         {
-            switch (view)
-            {
-                case View.Grammar: grammarTree.Render(); break;
-                case View.Lexer:   lexerTree.Render();   break;
-                case View.Tokens:  tokenList.Render();   break;
-                case View.Input:   textArea.Render();    break;
-                case View.Tree:    parseTree.Render();   break;
-            }
+            // Apply focus tint to the tree headers each render so the user can
+            // see at a glance which pane is active.
+            schemaTree.HeaderStyle(focus == Focus.Schema ? focusedHeader : unfocusedHeader);
+            parseTree.HeaderStyle(focus == Focus.Tree ? focusedHeader : unfocusedHeader);
+            schemaTree.Render();
+            textArea.Render();
+            parseTree.Render();
         }
 
         void RenderAll()
         {
             term.Clear();
             RenderHeader();
-            RenderBody();
+            RenderPanes();
             RenderHelp();
             RenderStatus();
         }
 
-        void SwitchView(View target)
+        void SetFocus(Focus next)
         {
-            if (view != View.Input) lastNonInputView = view;
-            view = target;
+            focus = next;
             RenderAll();
         }
 
@@ -351,76 +345,76 @@ internal static class Program
 
             if (ev.Mouse is { } m)
             {
-                bool consumed = view switch
+                // Click-to-focus: hit-test the three pane widgets in turn.
+                // Whichever viewport contains the click takes focus and the
+                // event is forwarded to its handler (mouse-aware widgets only
+                // — TextArea has no mouse handler yet, so its clicks just
+                // change focus without moving the cursor).
+                Focus? clickedPane = null;
+                if (schemaTree.HitTest(m.X, m.Y) is not null) clickedPane = Focus.Schema;
+                else if (textArea.HitTest(m.X, m.Y) is not null) clickedPane = Focus.Input;
+                else if (parseTree.HitTest(m.X, m.Y) is not null) clickedPane = Focus.Tree;
+
+                if (clickedPane is { } p)
                 {
-                    View.Grammar => grammarTree.HandleMouse(m),
-                    View.Lexer   => lexerTree.HandleMouse(m),
-                    View.Tokens  => tokenList.HandleMouse(m),
-                    View.Tree    => parseTree.HandleMouse(m),
-                    // TextArea has no mouse handler yet; clicks fall through.
-                    _            => false,
-                };
-                if (consumed) { RenderBody(); RenderStatus(); }
+                    if (focus != p) SetFocus(p);
+                    var consumed = p switch
+                    {
+                        Focus.Schema => schemaTree.HandleMouse(m),
+                        Focus.Tree   => parseTree.HandleMouse(m),
+                        _            => false,
+                    };
+                    if (consumed) { RenderPanes(); RenderStatus(); }
+                }
                 continue;
             }
 
-            // F1..F5 are universal view switches and work in every mode,
-            // including Input — they don't collide with text since terminals
-            // emit them as escape sequences, not characters.
-            View? fkeyTarget = ev.Key switch
-            {
-                ConsoleKey.F1 => View.Grammar,
-                ConsoleKey.F2 => View.Lexer,
-                ConsoleKey.F3 => View.Tokens,
-                ConsoleKey.F4 => View.Input,
-                ConsoleKey.F5 => View.Tree,
-                _             => null,
-            };
-            if (fkeyTarget is { } f) { SwitchView(f); continue; }
+            // Universal: Tab / Shift+Tab cycles focus, Ctrl+C quits regardless
+            // of focused pane. The Input pane needs to consume printable Tab
+            // bytes as soft-tabs, so when focus is Input we route Tab to the
+            // editor instead of cycling — Shift+Tab still cycles backwards
+            // because it's not text input.
+            var shift = (ev.Modifiers & ConsoleModifiers.Shift) != 0;
+            var ctrl  = (ev.Modifiers & ConsoleModifiers.Control) != 0;
 
-            if (view == View.Input)
+            if (ctrl && ev.Key == ConsoleKey.C) { quit = true; continue; }
+
+            if (ev.Key == ConsoleKey.Tab && (shift || focus != Focus.Input))
             {
-                // Edit mode: only Escape leaves; everything else types or navigates.
-                if (ev.Key == ConsoleKey.Escape)
-                {
-                    SwitchView(lastNonInputView);
-                    continue;
-                }
+                var step = shift ? -1 : 1;
+                var next = (Focus)(((int)focus + step + 3) % 3);
+                SetFocus(next);
+                continue;
+            }
+
+            if (focus == Focus.Input)
+            {
                 var moved = textArea.HandleKey(ev.Key, ev.Modifiers);
                 var typed = !moved && textArea.HandleChar(ev);
                 if (moved || typed)
                 {
-                    if (typed)
-                    {
-                        // Text changed → re-tokenize + re-parse, then refresh.
-                        // Synchronous await keeps the keystroke loop simple; for
-                        // larger inputs we'd debounce + run on a background task.
-                        await RebuildAsync();
-                    }
-                    RenderBody();
+                    if (typed) await RebuildAsync();   // text changed → re-tokenize + re-parse
+                    RenderPanes();
                     RenderStatus();
                 }
                 continue;
             }
 
+            // Schema / Tree panes (read-only): q quits, arrows move, etc.
             switch (ev.Key)
             {
                 case ConsoleKey.Q:
                 case ConsoleKey.Escape:
                     quit = true;
                     break;
-                case ConsoleKey.Tab:
-                    SwitchView((View)(((int)view % 5) + 1)); break;
                 default:
-                    bool changed = view switch
+                    bool changed = focus switch
                     {
-                        View.Grammar => grammarTree.HandleKey(ev.Key, ev.Modifiers),
-                        View.Lexer   => lexerTree.HandleKey(ev.Key, ev.Modifiers),
-                        View.Tokens  => tokenList.HandleKey(ev.Key),
-                        View.Tree    => parseTree.HandleKey(ev.Key, ev.Modifiers),
+                        Focus.Schema => schemaTree.HandleKey(ev.Key, ev.Modifiers),
+                        Focus.Tree   => parseTree.HandleKey(ev.Key, ev.Modifiers),
                         _            => false,
                     };
-                    if (changed) { RenderBody(); RenderStatus(); }
+                    if (changed) { RenderPanes(); RenderStatus(); }
                     break;
             }
         }
@@ -465,22 +459,21 @@ internal static class Program
         return dict;
     }
 
-    private static async Task<IReadOnlyList<TokenRow>> TokenizeSequenceAsync(
-        ReadOnlySequence<byte> bytes, IReadOnlyDictionary<string, LexRule[]> lexer, Grammar grammar)
+    // Token-only pass over the same byte sequence the parser later consumes.
+    // Used solely for the status-bar count; the parse tree carries the
+    // structural detail.
+    private static async Task<int> CountTokensAsync(
+        ReadOnlySequence<byte> bytes, IReadOnlyDictionary<string, LexRule[]> lexer)
     {
         var reader = PipeReader.Create(bytes);
         var lex = new PipeBytesLexer(reader, lexer, errorMode: LexerErrorMode.EmitAndStop, errorSymbolId: 0);
-        var rows = new List<TokenRow>();
-        var idx = 0;
+        var n = 0;
         while (await lex.MoveNextAsync())
         {
-            var item = await lex.CurrentAsync();
-            var symbolName = grammar.SymbolNames is { } sn && item.ID >= 0 && item.ID < sn.Length
-                ? sn[item.ID].Name
-                : item.ID == -1 ? "$" : $"#{item.ID}";
-            rows.Add(new TokenRow(idx++, item.Position, symbolName, item.Content?.ToString() ?? "", item.IsError));
+            _ = await lex.CurrentAsync();
+            n++;
         }
-        return rows;
+        return n;
     }
 
     /// <summary>
@@ -562,7 +555,7 @@ internal static class Program
     private static void PrintUsage()
     {
         SystemConsole.Error.WriteLine("usage: lalr-tui <grammar.lalr.yaml> [--input <source-file>]");
-        SystemConsole.Error.WriteLine("  views:    F1=grammar F2=lexer F3=tokens F4=input F5=tree");
-        SystemConsole.Error.WriteLine("  navigate: ↑/↓ move · ←/→ collapse/expand · Tab cycles · q/Esc quit (Esc returns from input mode)");
+        SystemConsole.Error.WriteLine("  layout:   schema (left)  ·  input (middle, default focus)  ·  parse tree (right)");
+        SystemConsole.Error.WriteLine("  navigate: Tab/Shift+Tab cycle panes · click pane to focus · ↑/↓/←/→ move · Ctrl+C quit");
     }
 }
