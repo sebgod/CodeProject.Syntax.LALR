@@ -740,7 +740,19 @@ public class Parser
                     }
                     var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
                     state = ParseTable.Actions[lastState, production.Left + 1].ActionParameter;
-                    reduction.State = production.Left;
+                    // Stash the goto-target parser state on the item so the next
+                    // reduction's `lastState = Peek().State` resolves to a real state.
+                    // The constructor already set State to the symbol id (or -1 if any
+                    // child is an error); the IsError property recomputes from
+                    // children when State >= 0, so marking the parser state here keeps
+                    // error propagation working while routing nested reductions correctly.
+                    // The original code stored production.Left here, which only happened
+                    // to work for grammars where a reduction is never the stack item
+                    // immediately below the next reduction's children — Wikipedia LaTeX's
+                    // `\frac{...}{...}` (two adjacent A non-terminals separated only by
+                    // a brace pair, where the second {E}'s reduction peeks the first A)
+                    // is the case that exposed it.
+                    reduction.State = state;
                     tokenStack.Push(reduction);
                     if (tokenStack.Count == 1 && tokenStack.Peek().ID == 0)
                     {

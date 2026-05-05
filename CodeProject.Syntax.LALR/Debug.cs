@@ -39,7 +39,7 @@ public class Debug
         {
             _errorWriter(failMsg + TokenInfo(item) + Environment.NewLine);
         }
-        else if (item.State == 0 && _infoWriter != null)
+        else if (_infoWriter != null)
         {
             _infoWriter(acceptMsg + TokenInfo(item) + Environment.NewLine);
         }
