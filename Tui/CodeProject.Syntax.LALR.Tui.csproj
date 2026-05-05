@@ -37,8 +37,24 @@
     <!-- YamlDotNet — used to deserialize *.lalr.yaml into GrammarSchema at
          runtime (matches what the source generator does at build time). -->
     <PackageReference Include="YamlDotNet" Version="17.1.0" />
-    <!-- Console.Lib — dock layout, TreeView, ScrollableList, VtStyle. -->
-    <PackageReference Include="Console.Lib" Version="2.8.421" />
+  </ItemGroup>
+
+  <!--
+    Console.Lib — dock layout, TreeView, TextArea, ScrollableList, VtStyle.
+    Mirrors the DIR.Lib pattern from Console.Lib's own csproj: when a sibling
+    working copy of `sharpastro/Console.Lib` exists on disk we pick it up as
+    a ProjectReference (great for in-tree iteration of TUI features), otherwise
+    fall back to the published NuGet package. The switch is controlled by the
+    `UseLocalConsoleLib` MSBuild property and can be forced explicitly.
+  -->
+  <PropertyGroup>
+    <UseLocalConsoleLib Condition="'$(UseLocalConsoleLib)' == '' AND Exists('..\..\..\sharpastro\Console.Lib\src\Console.Lib\Console.Lib.csproj')">true</UseLocalConsoleLib>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(UseLocalConsoleLib)' == 'true'">
+    <ProjectReference Include="..\..\..\sharpastro\Console.Lib\src\Console.Lib\Console.Lib.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalConsoleLib)' != 'true'">
+    <PackageReference Include="Console.Lib" Version="2.10.501" />
   </ItemGroup>
 
 </Project>

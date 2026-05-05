@@ -26,6 +26,14 @@ namespace CodeProject.Syntax.LALR.Tui;
 // every frame, so edits in the middle pane visibly propagate to the right.
 internal enum Focus { Schema = 0, Input = 1, Tree = 2 }
 
+// The middle and right panes each have two interchangeable modes selected by
+// F-keys. The middle pane swaps between the source-input editor (re-parses on
+// every keystroke) and the grammar-YAML editor (rebuilds the parser on every
+// keystroke). The right pane swaps between the parse-tree visualisation and
+// the LALR(1) parse table rendered as a state×symbol grid.
+internal enum MiddleMode { Input, GrammarEditor }
+internal enum RightMode { ParseTree, ParseTable }
+
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -33,18 +41,13 @@ internal static class Program
         var opts = ParseArgs(args);
         if (opts is null) return 2;
 
-        // Load + compile the grammar. Failures here become a one-shot error
-        // message rather than dumping us into a TUI with nothing to show.
-        GrammarSchema schema;
+        // Load the grammar YAML once. The text is kept around so the grammar
+        // editor pane can present it for live editing — every keystroke there
+        // re-deserialises and re-compiles, so we never re-read from disk.
+        string yamlText;
         try
         {
-            var yaml = await File.ReadAllTextAsync(opts.GrammarPath);
-            schema = Deserializer.Deserialize<GrammarSchema>(yaml);
-        }
-        catch (YamlException ex)
-        {
-            SystemConsole.Error.WriteLine($"yaml parse error in {opts.GrammarPath}: line {ex.Start.Line}, column {ex.Start.Column}: {ex.Message}");
-            return 1;
+            yamlText = await File.ReadAllTextAsync(opts.GrammarPath);
         }
         catch (FileNotFoundException)
         {
@@ -52,53 +55,19 @@ internal static class Program
             return 1;
         }
 
-        Grammar grammar;
-        Dictionary<string, LexRule[]> lexer;
-        string? compileError = null;
-        try
+        var session = CompileSession(yamlText);
+        if (session.YamlError != null)
         {
-            // Stub-actions: the TUI is strictly observational, so we never
-            // execute the rewriters — any production that names an action gets
-            // a no-op that returns the default Reduction. Without this every
-            // schema with `action: …` would fail to compile here.
-            var stubActions = BuildStubActions(schema);
-            (grammar, lexer) = SchemaCompiler.Compile(schema, stubActions);
-        }
-        catch (SchemaCompilationException ex)
-        {
-            grammar = default;
-            lexer = new Dictionary<string, LexRule[]>();
-            compileError = ex.Message;
+            SystemConsole.Error.WriteLine($"yaml parse error in {opts.GrammarPath}: {session.YamlError}");
+            return 1;
         }
 
         // Initial input buffer: seeded from --input <file> if given, else empty.
-        // The buffer is editable from the Input view; every edit re-tokenizes
-        // and re-parses, refreshing the Tokens and Tree views in place.
         string initialInputText = "";
         if (opts.InputPath is { } inputPath)
         {
-            try
-            {
-                initialInputText = await File.ReadAllTextAsync(inputPath);
-            }
-            catch (Exception ex)
-            {
-                // Fall back to empty buffer; the error surfaces in the status bar.
-                initialInputText = "";
-                _ = ex;
-            }
-        }
-
-        // Build the parser table once. Constructor failures (grammar conflicts)
-        // are propagated as a status-bar message rather than a hard exit, so the
-        // user can still browse the schema/lexer views to debug.
-        Parser? parser = null;
-        string? parserError = null;
-        if (compileError is null)
-        {
-            try { parser = new Parser(grammar); }
-            catch (GrammarConflictException ex) { parserError = "grammar conflicts: " + ex.Message; }
-            catch (Exception ex) { parserError = "parser-build error: " + ex.Message; }
+            try { initialInputText = await File.ReadAllTextAsync(inputPath); }
+            catch (Exception) { initialInputText = ""; }
         }
 
         await using var term = new CL.VirtualTerminal();
@@ -107,14 +76,14 @@ internal static class Program
         if (term.IsInputRedirected || term.IsOutputRedirected)
         {
             SystemConsole.Error.WriteLine("[lalr-tui] stdin/stdout is not a terminal — falling back to non-interactive summary");
-            PrintNonInteractive(opts, schema, grammar, lexer, initialInputText, compileError);
+            PrintNonInteractive(opts, session, initialInputText);
             return 0;
         }
 
         term.EnterAlternateScreen();
         try
         {
-            await RunUi(term, opts, schema, grammar, lexer, parser, initialInputText, compileError, parserError);
+            await RunUi(term, opts, session, initialInputText, yamlText);
         }
         finally
         {
@@ -132,27 +101,113 @@ internal static class Program
         .IgnoreUnmatchedProperties()
         .Build();
 
+    /// <summary>
+    /// Loaded grammar pipeline state. Mutated whenever the grammar editor
+    /// makes a change, never replaced wholesale (so all the cached refs in
+    /// the UI keep pointing at the same instance).
+    /// </summary>
+    private sealed class Session
+    {
+        public GrammarSchema Schema = new();
+        public Grammar Grammar;
+        public IReadOnlyDictionary<string, LexRule[]> Lexer = new Dictionary<string, LexRule[]>();
+        public Parser? Parser;
+        public List<ParseTableRow> ParseRows = [];
+        public string? YamlError;
+        public string? CompileError;
+        public string? ParserError;
+    }
+
+    private static Session CompileSession(string yamlText)
+    {
+        var s = new Session();
+        try
+        {
+            // Empty YAML → empty schema. Use a `?? new()` fallback so downstream
+            // null-checks don't have to special-case the "deleted everything"
+            // case where the user blanked the buffer.
+            s.Schema = Deserializer.Deserialize<GrammarSchema>(yamlText) ?? new GrammarSchema();
+        }
+        catch (YamlException ex)
+        {
+            s.YamlError = $"line {ex.Start.Line}, col {ex.Start.Column}: {ex.Message}";
+            return s;
+        }
+
+        try
+        {
+            // Stub-actions: the TUI is observational. We pass actions=null when
+            // there are no actions in the schema; otherwise we register a no-op
+            // for every action so SchemaCompiler doesn't reject the schema. The
+            // parser invocation later passes allowRewriting=false so these never
+            // actually run.
+            var stubActions = BuildStubActions(s.Schema);
+            (s.Grammar, s.Lexer) = SchemaCompiler.Compile(s.Schema, stubActions);
+        }
+        catch (SchemaCompilationException ex)
+        {
+            s.Grammar = default;
+            s.Lexer = new Dictionary<string, LexRule[]>();
+            s.CompileError = ex.Message;
+            return s;
+        }
+        catch (Exception ex)
+        {
+            // Defense in depth for the live grammar editor: any keystroke can
+            // leave the schema mid-edit, and a stray null inside a partially-
+            // typed YAML doc could surface as something other than a clean
+            // SchemaCompilationException. Treat it as a compile error so the
+            // status bar shows it instead of the TUI crashing.
+            s.Grammar = default;
+            s.Lexer = new Dictionary<string, LexRule[]>();
+            s.CompileError = ex.GetType().Name + ": " + ex.Message;
+            return s;
+        }
+
+        try
+        {
+            s.Parser = new Parser(s.Grammar);
+            s.ParseRows = ParseTableView.BuildRows(s.Parser, s.Grammar, s.Schema);
+        }
+        catch (GrammarConflictException ex) { s.ParserError = "grammar conflicts: " + ex.Message; }
+        catch (Exception ex) { s.ParserError = "parser-build error: " + ex.Message; }
+
+        return s;
+    }
+
     private static async Task RunUi(
         CL.IVirtualTerminal term,
         Options opts,
-        GrammarSchema schema,
-        Grammar grammar,
-        IReadOnlyDictionary<string, LexRule[]> lexer,
-        Parser? parser,
+        Session session,
         string initialInputText,
-        string? compileError,
-        string? parserError)
+        string initialYamlText)
     {
-        var focus = Focus.Input;     // input is the workflow's natural starting point
+        var focus = Focus.Input;
+        var middleMode = MiddleMode.Input;
+        var rightMode = RightMode.ParseTree;
+        // Last text we wrote to (or read from) disk. The grammar editor's
+        // dirty flag is derived from `grammarState.GetText() != savedYamlText`,
+        // and Ctrl+S replaces this with the freshly-saved buffer. Defining
+        // dirty as a derived value (not a boolean we have to remember to flip)
+        // means an undo back to the saved state automatically clears the
+        // asterisk in the header.
+        var savedYamlText = initialYamlText;
+        // Status message shown briefly in the help bar after a save. Cleared
+        // on the next keystroke so it doesn't linger.
+        string? saveStatus = null;
+
         var panel = new CL.Panel(term);
         var headerVp = panel.Dock(DockStyle.Top, 1);
         var statusVp = panel.Dock(DockStyle.Bottom, 1);
         var helpVp   = panel.Dock(DockStyle.Bottom, 1);
         // Three-column body. Sizes are cell-cols; the middle pane gets the
-        // remainder via Fill so it expands on wider terminals.
+        // remainder via Fill so it expands on wider terminals. The parse-table
+        // pane is wider (60) than the parse-tree pane needs (40); we use 60 so
+        // the table renders the full row of cells without truncation in the
+        // common case.
         var schemaVp = panel.Dock(DockStyle.Left, 36);
-        var parseVp  = panel.Dock(DockStyle.Right, 40);
-        var inputVp  = panel.Fill();
+        var rightVp  = panel.Dock(DockStyle.Right, 60);
+        var middleVp = panel.Fill();
 
         var header = new CL.TextBar(headerVp);
         var status = new CL.TextBar(statusVp);
@@ -162,72 +217,142 @@ internal static class Program
         // synthetic root, each half collapsible independently.
         var schemaTree = new CL.TreeView<Node>(schemaVp);
         schemaTree.Header(" schema");
-        schemaTree.Root(SchemaRoot.Build(schema, grammar, lexer), expandRoot: true);
 
-        var textState = new CL.TextAreaState(initialInputText);
-        var textArea = new CL.TextArea(inputVp);
-        textArea.State = textState;
+        // Two text areas share the middle viewport — only one renders at a time
+        // depending on middleMode. Keeping both around means the user's edit
+        // state is preserved across mode switches.
+        var inputState = new CL.TextAreaState(initialInputText);
+        var inputArea = new CL.TextArea(middleVp);
+        inputArea.State = inputState;
 
-        var parseTree = new CL.TreeView<Node>(parseVp);
+        // Seed the YAML editor from the in-memory text Main already read off
+        // disk — cheaper than a second File.ReadAllText and guarantees the
+        // editor matches `savedYamlText` byte-for-byte (otherwise a stray
+        // newline difference would mark the buffer dirty on first paint).
+        var grammarState = new CL.TextAreaState(initialYamlText);
+        var grammarArea = new CL.TextArea(middleVp);
+        grammarArea.State = grammarState;
+        grammarState.MoveDocumentStart();
+
+        // Parse-tree (right pane, default) and the parse-table list — same
+        // viewport, switched by F-keys.
+        var parseTree = new CL.TreeView<Node>(rightVp);
         parseTree.Header(" parse tree");
 
-        // Re-tokenizes and re-parses from the current TextAreaState contents.
-        // The tokens count surfaces in the status bar; the parse tree is the
-        // canonical view of the structure (token leaves are visible there).
+        var parseTable = new CL.ScrollableList<ParseTableRow>(rightVp);
+        parseTable.Header(" parse table");
+
+        // Tokens count and parse error are recomputed on every input or grammar
+        // edit; the middle/right widgets re-render every loop iteration.
         var tokenCount = 0;
         string? tokenError = null;
         string? parseError = null;
-        async Task RebuildAsync()
+
+        async Task ReparseAsync()
         {
             tokenCount = 0;
             tokenError = null;
             parseError = null;
-            if (lexer.Count == 0)
+            schemaTree.Root(SchemaRoot.Build(session.Schema, session.Grammar, session.Lexer), expandRoot: true);
+            parseTable.Items(session.ParseRows);
+
+            if (session.Lexer.Count == 0)
             {
-                parseTree.Root(ParseTreeRoot.Build(null, grammar, "no lexer"), expandRoot: true);
+                parseTree.Root(ParseTreeRoot.Build(null, session.Grammar, session.CompileError ?? "no lexer"), expandRoot: true);
                 return;
             }
             // Zero-alloc input feed: build a 2-segment ReadOnlySequence<byte>
-            // straight over the gap buffer's two halves. The sequence is value-
-            // typed and non-consuming so we can hand it to two PipeReaders (one
-            // for the tokens pass, one for the parser pass) without copying.
-            // The gap buffer's array can move under us if a subsequent edit
-            // grows it, but we await the parse fully here before returning, so
-            // the memory stays valid for the duration of both passes.
-            var seq = JoinSegments(textState.MemoryBeforeGap, textState.MemoryAfterGap);
+            // straight over the gap buffer's two halves. Both passes (token
+            // count and parser) finish synchronously enough relative to the
+            // backing array's lifetime that the memory stays valid.
+            var seq = JoinSegments(inputState.MemoryBeforeGap, inputState.MemoryAfterGap);
             try
             {
-                tokenCount = await CountTokensAsync(seq, lexer);
+                tokenCount = await CountTokensAsync(seq, session.Lexer);
             }
-            catch (Exception ex) { tokenError = ex.Message; }
-
-            if (parser is null)
+            catch (Exception ex)
             {
-                parseTree.Root(ParseTreeRoot.Build(null, grammar, parserError ?? compileError ?? "no parser"), expandRoot: true);
+                // Include the originating call-site so a "Parameter 'position'"
+                // ArgumentOutOfRangeException isn't a needle in a haystack.
+                tokenError = ex.GetType().Name + ": " + ex.Message + " @ " + (ex.StackTrace?.Split('\n', 2)[0]?.Trim() ?? "?");
+            }
+
+            if (session.Parser is null)
+            {
+                parseTree.Root(ParseTreeRoot.Build(null, session.Grammar, session.ParserError ?? session.CompileError ?? "no parser"), expandRoot: true);
                 return;
             }
             try
             {
                 var reader = PipeReader.Create(seq);
-                var lex = new PipeBytesLexer(reader, lexer, errorMode: LexerErrorMode.EmitAndStop, errorSymbolId: 0);
+                var lex = new PipeBytesLexer(reader, session.Lexer, errorMode: LexerErrorMode.EmitAndStop, errorSymbolId: 0);
                 var laIter = new AsyncLATokenIterator(lex);
-                // Return mode: a parse error should still produce a (partial) Item
-                // we can render rather than blowing up the UI.
-                var root = await parser.ParseInputAsync(laIter, errorMode: ParserErrorMode.Return);
-                parseTree.Root(ParseTreeRoot.Build(root, grammar), expandRoot: true);
+                // allowRewriting:false skips the (no-op) stub actions and
+                // forces the parser to emit fresh Reduction nodes from its
+                // reduction frame — without this, the stub null-returning
+                // actions collapse the entire tree into a Scalar Item with
+                // null content, which renders as a single "S 1:1" leaf. See
+                // Parser.cs around line 733 for the trim/rewrite branch.
+                var root = await parser_ParseInputAsync(session.Parser, laIter);
+                parseTree.Root(ParseTreeRoot.Build(root, session.Grammar), expandRoot: true);
             }
             catch (Exception ex)
             {
                 parseError = ex.Message;
-                parseTree.Root(ParseTreeRoot.Build(null, grammar, ex.Message), expandRoot: true);
+                parseTree.Root(ParseTreeRoot.Build(null, session.Grammar, ex.Message), expandRoot: true);
             }
         }
 
-        // Initial fill so all views have content from the seed buffer.
-        await RebuildAsync();
+        // Wraps the parser invocation with the TUI-specific arguments so the
+        // call site doesn't restate them each time we reparse.
+        static Task<Item> parser_ParseInputAsync(Parser p, AsyncLATokenIterator laIter) =>
+            p.ParseInputAsync(laIter, allowRewriting: false, errorMode: ParserErrorMode.Return);
+
+        async Task RecompileGrammarAsync()
+        {
+            // Pull the latest YAML out of the editor buffer and feed the whole
+            // pipeline through CompileSession, then refresh dependent views.
+            // Driven by Ctrl+S only — per-keystroke recompile was too eager
+            // (every transient mid-edit YAML state went through SchemaCompiler
+            // + Parser table generation) and the lexer subtree visibly froze
+            // when a partial edit broke compilation.
+            var newYaml = grammarState.GetText();
+            var newSession = CompileSession(newYaml);
+            session.Schema = newSession.Schema;
+            session.Grammar = newSession.Grammar;
+            session.Lexer = newSession.Lexer;
+            session.Parser = newSession.Parser;
+            session.ParseRows = newSession.ParseRows;
+            session.YamlError = newSession.YamlError;
+            session.CompileError = newSession.CompileError;
+            session.ParserError = newSession.ParserError;
+            await ReparseAsync();
+        }
+
+        bool IsGrammarDirty() => !string.Equals(grammarState.GetText(), savedYamlText, StringComparison.Ordinal);
+
+        async Task SaveAndRecompileAsync()
+        {
+            var buffer = grammarState.GetText();
+            try
+            {
+                await File.WriteAllTextAsync(opts.GrammarPath, buffer);
+                savedYamlText = buffer;
+                saveStatus = $"saved {Path.GetFileName(opts.GrammarPath)}";
+            }
+            catch (Exception ex)
+            {
+                // Disk write failed — keep the buffer dirty and surface the
+                // error in the status bar instead of silently losing edits.
+                saveStatus = "save failed: " + ex.Message;
+                return;
+            }
+            await RecompileGrammarAsync();
+        }
+
+        await ReparseAsync();
 
         // Bright header style for the focused pane; dim header for the rest.
-        // Helps the eye land on the active pane without changing the layout.
         var focusedHeader   = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Blue);
         var unfocusedHeader = new CL.VtStyle(CL.SgrColor.BrightBlack, CL.SgrColor.Black);
 
@@ -235,14 +360,20 @@ internal static class Program
         {
             var leftSb = new StringBuilder();
             leftSb.Append(' ').Append(Path.GetFileName(opts.GrammarPath));
-            leftSb.Append("  · ").Append(schema.Symbols?.Count ?? 0).Append(" symbols");
-            leftSb.Append(" · ").Append(schema.Productions?.Count ?? 0).Append(" groups");
-            if (schema.Lexer is { Count: > 0 } l) leftSb.Append(" · ").Append(l.Count).Append(" lex states");
+            // Conventional editor convention: trailing asterisk on the
+            // filename means unsaved changes. Cleared automatically once the
+            // buffer matches the on-disk text again (e.g. after Ctrl+S, or
+            // when the user undoes back to the saved state).
+            if (IsGrammarDirty()) leftSb.Append('*');
+            leftSb.Append("  · ").Append(session.Schema.Symbols?.Count ?? 0).Append(" symbols");
+            leftSb.Append(" · ").Append(session.Schema.Productions?.Count ?? 0).Append(" groups");
+            if (session.Schema.Lexer is { Count: > 0 } l) leftSb.Append(" · ").Append(l.Count).Append(" lex states");
+            if (session.Parser is { } p) leftSb.Append(" · ").Append(p.ParseTable.States).Append(" states");
             var right = focus switch
             {
-                Focus.Schema => "[schema]·input·tree ",
-                Focus.Input  => "schema·[input]·tree ",
-                Focus.Tree   => "schema·input·[tree] ",
+                Focus.Schema => "[schema]·middle·right ",
+                Focus.Input  => "schema·[middle]·right ",
+                Focus.Tree   => "schema·middle·[right] ",
                 _            => "",
             };
             header
@@ -254,16 +385,24 @@ internal static class Program
 
         void RenderStatus()
         {
+            // Error precedence (highest first): YAML > schema-compile > parser-build
+            // > lexer > parser. Each layer's failure hides downstream noise so the
+            // user sees the root cause first.
             string text;
             CL.VtStyle style;
-            if (compileError != null)
+            if (session.YamlError != null)
             {
-                text = " compile error: " + compileError;
+                text = " yaml error: " + session.YamlError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
-            else if (parserError != null)
+            else if (session.CompileError != null)
             {
-                text = " " + parserError;
+                text = " compile error: " + session.CompileError;
+                style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
+            }
+            else if (session.ParserError != null)
+            {
+                text = " " + session.ParserError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
             else if (tokenError != null)
@@ -276,13 +415,25 @@ internal static class Program
                 text = " parse error: " + parseError;
                 style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Red);
             }
+            else if (saveStatus is not null)
+            {
+                // Brief save confirmation. Shown until the next keystroke so a
+                // successful save is acknowledged but doesn't permanently
+                // occupy the status line.
+                text = " " + saveStatus;
+                style = new CL.VtStyle(CL.SgrColor.BrightWhite, CL.SgrColor.Green);
+            }
             else
             {
                 text = focus switch
                 {
                     Focus.Schema => $" schema  {schemaTree.CursorIndex + 1}/{Math.Max(1, schemaTree.ItemCount)}  {NodeTitle(schemaTree.Selected)}",
-                    Focus.Input  => FormatInputStatus(textState, tokenCount),
-                    Focus.Tree   => $" tree    {parseTree.CursorIndex + 1}/{Math.Max(1, parseTree.ItemCount)}  {NodeTitle(parseTree.Selected)}",
+                    Focus.Input  => middleMode == MiddleMode.Input
+                        ? FormatInputStatus(inputState, tokenCount)
+                        : FormatGrammarStatus(grammarState, IsGrammarDirty()),
+                    Focus.Tree   => rightMode == RightMode.ParseTree
+                        ? $" tree    {parseTree.CursorIndex + 1}/{Math.Max(1, parseTree.ItemCount)}  {NodeTitle(parseTree.Selected)}"
+                        : $" table   state {parseTable.CursorIndex} of {session.ParseRows.Count}",
                     _            => "",
                 };
                 style = new CL.VtStyle(CL.SgrColor.White, CL.SgrColor.BrightBlack);
@@ -292,27 +443,55 @@ internal static class Program
 
         void RenderHelp()
         {
-            // Help line is focus-sensitive because the dispatched keys differ:
-            // text-input pane consumes printable bytes whereas the trees use
-            // the same printable keys for navigation/quit.
-            var line = focus == Focus.Input
-                ? " [Tab] next pane  [Shift+Tab] prev  [↑/↓/←/→] move  [Home/End] line  [PgUp/PgDn] page  [Backspace/Del] erase  type to insert  [Ctrl+C] quit"
-                : " [Tab] next pane  [Shift+Tab] prev  [↑/↓] move  [←/→] collapse/expand  [Home/End] document  [PgUp/PgDn] page  [q] quit";
+            // F-keys are universal: they switch the middle/right pane mode
+            // regardless of which pane currently owns focus, so the user can
+            // flip into the parse-table or the grammar editor without first
+            // tabbing focus there.
+            var fHints = $" [F1] {(rightMode == RightMode.ParseTree ? "·tree·" : "tree")}/{(rightMode == RightMode.ParseTable ? "·table·" : "table")}  [F2] {(middleMode == MiddleMode.Input ? "·input·" : "input")}/{(middleMode == MiddleMode.GrammarEditor ? "·yaml·" : "yaml")}";
+            string keys;
+            if (focus == Focus.Input)
+            {
+                keys = middleMode == MiddleMode.Input
+                    ? "[Tab] next  [↑/↓/←/→] move  [Ctrl+←/→] word  type to insert  [Ctrl+C] quit"
+                    : "[Tab] next  [↑/↓/←/→] move  [Ctrl+←/→] word  [Ctrl+S] save+recompile  [Ctrl+C] quit";
+            }
+            else
+            {
+                keys = "[Tab] next  [↑/↓] move  [←/→] collapse/expand  [q] quit";
+            }
             help
-                .Text(line)
+                .Text(" " + keys + "    " + fHints)
                 .Style(new CL.VtStyle(CL.SgrColor.BrightBlack, CL.SgrColor.Black))
                 .Render();
         }
 
         void RenderPanes()
         {
-            // Apply focus tint to the tree headers each render so the user can
-            // see at a glance which pane is active.
             schemaTree.HeaderStyle(focus == Focus.Schema ? focusedHeader : unfocusedHeader);
-            parseTree.HeaderStyle(focus == Focus.Tree ? focusedHeader : unfocusedHeader);
             schemaTree.Render();
-            textArea.Render();
-            parseTree.Render();
+
+            // Middle pane: render whichever editor matches the current mode.
+            // The non-active editor's state stays alive in the background so
+            // a mode switch round-trips without losing edits or cursor pos.
+            if (middleMode == MiddleMode.Input) inputArea.Render();
+            else grammarArea.Render();
+
+            // Right pane: tree or table. Both keep their selection state so
+            // toggling F1 round-trips without losing the user's place.
+            if (rightMode == RightMode.ParseTree)
+            {
+                parseTree.HeaderStyle(focus == Focus.Tree ? focusedHeader : unfocusedHeader);
+                parseTree.Render();
+            }
+            else
+            {
+                // Re-set the header on every render so the column layout adapts
+                // to the current viewport width (e.g. after a terminal resize).
+                var headerLine = ParseTableView.BuildHeader(session.Grammar, rightVp.Size.Width);
+                parseTable.Header(" " + headerLine.TrimEnd());
+                parseTable.HeaderStyle(focus == Focus.Tree ? focusedHeader : unfocusedHeader);
+                parseTable.Render();
+            }
         }
 
         void RenderAll()
@@ -324,11 +503,7 @@ internal static class Program
             RenderStatus();
         }
 
-        void SetFocus(Focus next)
-        {
-            focus = next;
-            RenderAll();
-        }
+        void SetFocus(Focus next) { focus = next; RenderAll(); }
 
         RenderAll();
 
@@ -345,23 +520,23 @@ internal static class Program
 
             if (ev.Mouse is { } m)
             {
-                // Click-to-focus: hit-test the three pane widgets in turn.
-                // Whichever viewport contains the click takes focus and the
-                // event is forwarded to its handler (mouse-aware widgets only
-                // — TextArea has no mouse handler yet, so its clicks just
-                // change focus without moving the cursor).
                 Focus? clickedPane = null;
                 if (schemaTree.HitTest(m.X, m.Y) is not null) clickedPane = Focus.Schema;
-                else if (textArea.HitTest(m.X, m.Y) is not null) clickedPane = Focus.Input;
-                else if (parseTree.HitTest(m.X, m.Y) is not null) clickedPane = Focus.Tree;
+                else if ((middleMode == MiddleMode.Input ? inputArea.HitTest(m.X, m.Y) : grammarArea.HitTest(m.X, m.Y)) is not null) clickedPane = Focus.Input;
+                else if ((rightMode == RightMode.ParseTree ? parseTree.HitTest(m.X, m.Y) : parseTable.HitTest(m.X, m.Y)) is not null) clickedPane = Focus.Tree;
 
-                if (clickedPane is { } p)
+                if (clickedPane is { } pn)
                 {
-                    if (focus != p) SetFocus(p);
-                    var consumed = p switch
+                    if (focus != pn) SetFocus(pn);
+                    var consumed = pn switch
                     {
                         Focus.Schema => schemaTree.HandleMouse(m),
-                        Focus.Tree   => parseTree.HandleMouse(m),
+                        Focus.Tree   => rightMode == RightMode.ParseTree ? parseTree.HandleMouse(m) : parseTable.HandleMouse(m),
+                        // TextArea.HandleMouse landed in Console.Lib alongside
+                        // the click-to-position support; route both editors
+                        // (input + grammar YAML) through it so a click moves
+                        // the cursor instead of just changing focus.
+                        Focus.Input  => (middleMode == MiddleMode.Input ? inputArea : grammarArea).HandleMouse(m),
                         _            => false,
                     };
                     if (consumed) { RenderPanes(); RenderStatus(); }
@@ -369,15 +544,45 @@ internal static class Program
                 continue;
             }
 
-            // Universal: Tab / Shift+Tab cycles focus, Ctrl+C quits regardless
-            // of focused pane. The Input pane needs to consume printable Tab
-            // bytes as soft-tabs, so when focus is Input we route Tab to the
-            // editor instead of cycling — Shift+Tab still cycles backwards
-            // because it's not text input.
             var shift = (ev.Modifiers & ConsoleModifiers.Shift) != 0;
             var ctrl  = (ev.Modifiers & ConsoleModifiers.Control) != 0;
 
             if (ctrl && ev.Key == ConsoleKey.C) { quit = true; continue; }
+
+            // Ctrl+S: write the grammar buffer to disk and re-run the full
+            // pipeline (deserialise → schema compile → parser table → reparse
+            // input). Works from any focus so the user can save without having
+            // to tab focus into the YAML editor first. Silently ignored when
+            // the buffer matches disk — saves a redundant recompile.
+            if (ctrl && ev.Key == ConsoleKey.S)
+            {
+                if (IsGrammarDirty())
+                {
+                    await SaveAndRecompileAsync();
+                    RenderAll();
+                }
+                continue;
+            }
+
+            // Any other keystroke clears the brief save-confirmation message
+            // so it doesn't linger past the next interaction.
+            saveStatus = null;
+
+            // F-key mode toggles. These work from any focus so the user can
+            // pop into the grammar editor or the parse table without having
+            // to tab focus there first.
+            if (ev.Key == ConsoleKey.F1)
+            {
+                rightMode = rightMode == RightMode.ParseTree ? RightMode.ParseTable : RightMode.ParseTree;
+                RenderAll();
+                continue;
+            }
+            if (ev.Key == ConsoleKey.F2)
+            {
+                middleMode = middleMode == MiddleMode.Input ? MiddleMode.GrammarEditor : MiddleMode.Input;
+                RenderAll();
+                continue;
+            }
 
             if (ev.Key == ConsoleKey.Tab && (shift || focus != Focus.Input))
             {
@@ -389,11 +594,30 @@ internal static class Program
 
             if (focus == Focus.Input)
             {
-                var moved = textArea.HandleKey(ev.Key, ev.Modifiers);
-                var typed = !moved && textArea.HandleChar(ev);
+                // Route to the active editor (input or grammar). Source-input
+                // edits reparse immediately (cheap — same parser, new bytes).
+                // Grammar-YAML edits just mutate the buffer; the recompile is
+                // deferred to Ctrl+S because the per-keystroke pipeline (yaml
+                // deserialize → schema compile → parser-table generate) is
+                // both expensive and visually noisy when the YAML is mid-edit.
+                var area = middleMode == MiddleMode.Input ? inputArea : grammarArea;
+                var moved = area.HandleKey(ev.Key, ev.Modifiers);
+                var typed = !moved && area.HandleChar(ev);
                 if (moved || typed)
                 {
-                    if (typed) await RebuildAsync();   // text changed → re-tokenize + re-parse
+                    if (typed)
+                    {
+                        if (middleMode == MiddleMode.GrammarEditor)
+                        {
+                            // Buffer-only change. The dirty flag picks this up
+                            // automatically via savedYamlText comparison; no
+                            // recompile until the user hits Ctrl+S.
+                        }
+                        else
+                        {
+                            await ReparseAsync();
+                        }
+                    }
                     RenderPanes();
                     RenderStatus();
                 }
@@ -411,7 +635,9 @@ internal static class Program
                     bool changed = focus switch
                     {
                         Focus.Schema => schemaTree.HandleKey(ev.Key, ev.Modifiers),
-                        Focus.Tree   => parseTree.HandleKey(ev.Key, ev.Modifiers),
+                        Focus.Tree   => rightMode == RightMode.ParseTree
+                            ? parseTree.HandleKey(ev.Key, ev.Modifiers)
+                            : parseTable.HandleKey(ev.Key, ev.Modifiers),
                         _            => false,
                     };
                     if (changed) { RenderPanes(); RenderStatus(); }
@@ -426,13 +652,26 @@ internal static class Program
         return $" line {line + 1}, col {col + 1} (byte)  ·  {s.Length} bytes  ·  {tokenCount} tokens";
     }
 
+    private static string FormatGrammarStatus(CL.TextAreaState s, bool dirty)
+    {
+        var (line, col) = s.CursorLineColumn;
+        var saveHint = dirty ? "[Ctrl+S to save]" : "saved";
+        return $" grammar  line {line + 1}, col {col + 1}  ·  {s.Length} bytes  ·  {saveHint}";
+    }
+
     private static string NodeTitle(Node? n)
     {
         if (n is null) return "";
-        // Strip VT escape codes for the status line; FormatNodeContent emits
-        // escape sequences for highlighting that render as garbage in the bar.
         return n.PlainTitle;
     }
+
+    // Sentinel used by every stub action; one shared instance avoids per-call
+    // allocations and avoids the `null!` null-forgiving operator. SchemaCompiler
+    // only checks that the dictionary has an entry for every named action — it
+    // never invokes the func — and the parser is called with allowRewriting:false
+    // so the func never runs at parse time either. Any non-null object satisfies
+    // the contract.
+    private static readonly object StubActionSentinel = new();
 
     private static IReadOnlyDictionary<string, Func<int, Item[], object>> BuildStubActions(GrammarSchema schema)
     {
@@ -446,13 +685,7 @@ internal static class Program
                 var name = r?.Action;
                 if (!string.IsNullOrEmpty(name) && !dict.ContainsKey(name))
                 {
-                    // No-op rewriter: defer to the parser's default Reduction
-                    // by returning null and relying on Production.HasRewriter
-                    // semantics. Returning null from a rewriter is a valid
-                    // payload — but for TUI the parser is never run, so this
-                    // is dead code at runtime; only the compile-time presence
-                    // of an entry in the dictionary matters.
-                    dict[name] = static (_, _) => null!;
+                    dict[name] = static (_, _) => StubActionSentinel;
                 }
             }
         }
@@ -502,16 +735,16 @@ internal static class Program
         }
     }
 
-    private static void PrintNonInteractive(
-        Options opts, GrammarSchema schema, Grammar grammar,
-        IReadOnlyDictionary<string, LexRule[]> lexer,
-        string initialInputText, string? compileError)
+    private static void PrintNonInteractive(Options opts, Session s, string initialInputText)
     {
         SystemConsole.WriteLine($"file: {opts.GrammarPath}");
-        SystemConsole.WriteLine($"symbols: {schema.Symbols?.Count ?? 0}");
-        SystemConsole.WriteLine($"production groups: {schema.Productions?.Count ?? 0}");
-        SystemConsole.WriteLine($"lexer states: {schema.Lexer?.Count ?? 0}");
-        if (compileError != null) SystemConsole.WriteLine($"compile error: {compileError}");
+        SystemConsole.WriteLine($"symbols: {s.Schema.Symbols?.Count ?? 0}");
+        SystemConsole.WriteLine($"production groups: {s.Schema.Productions?.Count ?? 0}");
+        SystemConsole.WriteLine($"lexer states: {s.Schema.Lexer?.Count ?? 0}");
+        if (s.YamlError != null) SystemConsole.WriteLine($"yaml error: {s.YamlError}");
+        if (s.CompileError != null) SystemConsole.WriteLine($"compile error: {s.CompileError}");
+        if (s.ParserError != null) SystemConsole.WriteLine($"parser error: {s.ParserError}");
+        if (s.Parser is { } p) SystemConsole.WriteLine($"parse-table states: {p.ParseTable.States}");
         if (!string.IsNullOrEmpty(initialInputText))
         {
             SystemConsole.WriteLine($"input bytes from {opts.InputPath}: {Encoding.UTF8.GetByteCount(initialInputText)}");
@@ -555,7 +788,7 @@ internal static class Program
     private static void PrintUsage()
     {
         SystemConsole.Error.WriteLine("usage: lalr-tui <grammar.lalr.yaml> [--input <source-file>]");
-        SystemConsole.Error.WriteLine("  layout:   schema (left)  ·  input (middle, default focus)  ·  parse tree (right)");
+        SystemConsole.Error.WriteLine("  layout:   schema (left)  ·  input/grammar (middle, F2 toggles)  ·  parse tree/table (right, F1 toggles)");
         SystemConsole.Error.WriteLine("  navigate: Tab/Shift+Tab cycle panes · click pane to focus · ↑/↓/←/→ move · Ctrl+C quit");
     }
 }
