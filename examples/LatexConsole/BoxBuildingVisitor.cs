@@ -120,38 +120,24 @@ public sealed class BoxBuildingVisitor : IVisitor<Box>
     /// Re-build a sub-tree at a smaller font size. The parser already turned
     /// the inner sub-expression into a Box at the *outer* font size — for
     /// scripts we want the sub-tree at a smaller size, so we rebuild from
-    /// the script's leaves. For composite scripts (e.g. <c>x^{a+b}</c>),
-    /// this means the inner <c>+</c> in the script gets the smaller font's
-    /// kerns and operator glyph, which is exactly what TeX does too.
+    /// the script's leaves. For atom scripts (digits, single letters,
+    /// commands) the parser-built Box is a single <see cref="GlyphBox"/>,
+    /// which we rebuild at the smaller style (using the new
+    /// <see cref="GlyphBox.Text"/> property exposed in DIR.Lib 2.8) so the
+    /// glyph itself shrinks — what TeX does for x², n³ etc.
     ///
-    /// In practice for short scripts (digits, single letters) the parser-built
-    /// Box is already a single GlyphBox, so we wrap-and-rebuild trivially.
-    /// For multi-token scripts we'd need a deeper rebuild — the current
-    /// approach approximates by wrapping the existing Box but downscaling
-    /// only the rule-thicknesses that touch the outer style. Good enough for
-    /// the demo corpus.
+    /// For composite scripts (<c>x^{a+b}</c>) the parser-built Box is an
+    /// HBox whose children were also built at parent style; we'd need a
+    /// deeper rebuild from the AST to truly shrink them. The current
+    /// implementation passes composites through unchanged — accepting that
+    /// inner glyphs read slightly large until the visitor threads style
+    /// context through every Visit method. Good enough for the demo corpus.
     /// </summary>
     private static Box ReBuild(Item arg, BoxStyle smaller)
     {
         var box = (Box)arg.Content;
-        // If the script is a single GlyphBox, rebuild it at the smaller size
-        // so the glyph itself shrinks. Otherwise keep the composite — the
-        // SupSubBox positioning still uses the right shifts even if the
-        // composite glyphs are at the parent's size.
         if (box is GlyphBox gb)
-        {
-            // We don't have access to the original raw text here without
-            // exposing it; for the demo, fall back to the parent's size for
-            // composites. Atoms (digits/letters/commands) can re-extract
-            // by sniffing Item.Content — but Number/Variable/Command pre-built
-            // the GlyphBox using parent style. To genuinely shrink, the Visit
-            // methods need to know they're inside a script context; the
-            // current pass approximates by re-using the parent's GlyphBox
-            // and accepting the slight over-size. TODO: thread style context
-            // through the visitor.
-            _ = smaller;
-            return gb;
-        }
+            return new GlyphBox(gb.Text, smaller);
         return box;
     }
 

@@ -35,7 +35,7 @@
       LimitsBox / etc.) and come transitively. DIR.Lib also provides the
       RgbaImageRenderer + ManagedFontRasterizer this example uses.
     -->
-    <PackageReference Include="Console.Lib" Version="2.11.531" />
+    <PackageReference Include="Console.Lib" Version="2.11.541" />
   </ItemGroup>
 
 </Project>
