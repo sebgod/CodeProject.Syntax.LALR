@@ -228,6 +228,40 @@ public class SchemaCompilerTests
         Assert.Contains("actions", ex.Message);
     }
 
+    /// <summary>
+    /// Live-edit defence: when the YAML deserialiser produces a list with a
+    /// null entry (e.g. the user types <c>- </c> with no body and triggers a
+    /// recompile mid-edit), the compiler must surface a SchemaCompilationException
+    /// with a path locator instead of NREing — lalr-tui's grammar editor relies
+    /// on every keystroke producing a clean compile error rather than crashing.
+    /// </summary>
+    [Fact]
+    public void NullProductionRule_ThrowsWithPathLocator()
+    {
+        var schema = MinimalValidSchema();
+        schema.Productions[0].Rules.Add(null);
+        var ex = Assert.Throws<SchemaCompilationException>(() => SchemaCompiler.Compile(schema));
+        Assert.Contains("productions[0].rules[1]", ex.Message);
+    }
+
+    [Fact]
+    public void NullProductionGroup_ThrowsWithPathLocator()
+    {
+        var schema = MinimalValidSchema();
+        schema.Productions.Add(null);
+        var ex = Assert.Throws<SchemaCompilationException>(() => SchemaCompiler.Compile(schema));
+        Assert.Contains("productions[1]", ex.Message);
+    }
+
+    [Fact]
+    public void NullLexerRule_ThrowsWithPathLocator()
+    {
+        var schema = MinimalValidSchema();
+        schema.Lexer[PipeBytesLexer.RootState].Add(null);
+        var ex = Assert.Throws<SchemaCompilationException>(() => SchemaCompiler.Compile(schema));
+        Assert.Contains("lexer.root[1]", ex.Message);
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────

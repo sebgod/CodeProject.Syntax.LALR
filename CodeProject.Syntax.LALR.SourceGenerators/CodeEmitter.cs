@@ -22,6 +22,7 @@ internal static class CodeEmitter
         sb.AppendLine("#nullable disable");
         sb.AppendLine("using System.Collections.Generic;");
         sb.AppendLine("using CodeProject.Syntax.LALR;");
+        sb.AppendLine("using CodeProject.Syntax.LALR.LexicalGrammar;");
         sb.AppendLine("using CodeProject.Syntax.LALR.Schema;");
         sb.AppendLine();
         sb.Append("namespace ").Append(namespaceName).AppendLine(";");
@@ -37,8 +38,59 @@ internal static class CodeEmitter
         EmitActions(sb, schema.Actions);
 
         sb.AppendLine("    };");
+
+        // Always emit a no-arg Build() that runs the schema compiler. When the
+        // schema has any production-level actions, calling this overload throws
+        // at runtime — but we still emit it so users with actions get a hint
+        // (the visitor overload in <ClassName>.Visitor.g.cs is the one they
+        // actually want, and it shadows this one at the call site for any
+        // typed visitor argument). Keeping the no-arg version present means a
+        // YAML grammar with no actions is one line away from a working parser:
+        //   var (g, lex) = MyGrammar.Build();
+        EmitBuild(sb, HasAnyAction(schema));
+
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    private static bool HasAnyAction(GrammarSchema schema)
+    {
+        if (schema.Productions == null) return false;
+        foreach (var g in schema.Productions)
+        {
+            if (g?.Rules == null) continue;
+            foreach (var r in g.Rules)
+            {
+                if (!string.IsNullOrEmpty(r?.Action)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static void EmitBuild(StringBuilder sb, bool hasActions)
+    {
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Compile <see cref=\"Schema\"/> into the runtime grammar + lexer pair.");
+        if (hasActions)
+        {
+            sb.AppendLine("    /// This overload supplies no production actions, so callers get a");
+            sb.AppendLine("    /// schema-compile error if any production names an action. Pass an");
+            sb.AppendLine("    /// <c>IVisitor&lt;T&gt;</c> to the typed overload (see Visitor.g.cs) to");
+            sb.AppendLine("    /// wire the actions in instead.");
+        }
+        else
+        {
+            sb.AppendLine("    /// One-liner replacement for <c>SchemaCompiler.Compile(Schema)</c>;");
+            sb.AppendLine("    /// emitted unconditionally so consumer code never has to import");
+            sb.AppendLine("    /// <c>CodeProject.Syntax.LALR.Schema.SchemaCompiler</c> directly.");
+        }
+        sb.AppendLine("    /// </summary>");
+        // global:: + fully-qualified — the consumer's class is often called
+        // <c>Grammar</c> too, which would otherwise shadow
+        // <see cref="global::CodeProject.Syntax.LALR.Grammar"/> here and CS0718.
+        sb.AppendLine("    public static (global::CodeProject.Syntax.LALR.Grammar Grammar, Dictionary<string, global::CodeProject.Syntax.LALR.LexicalGrammar.LexRule[]> Lexer) Build() =>");
+        sb.AppendLine("        SchemaCompiler.Compile(Schema);");
     }
 
     private static void EmitSymbols(StringBuilder sb, List<string> symbols)

@@ -102,7 +102,7 @@ internal static class Program
         // into the same MakeList / MakeQuotedString / MakeMetaTerm rewriter logic
         // stage0 wires into Production constructors directly.
         var visitor = new BnfVisitor();
-        var (grammar, lexerTable) = SchemaCompiler.Compile(Bnf.Schema, Bnf.BuildActions(visitor));
+        var (grammar, lexerTable) = Bnf.Build(visitor);
 
         var parser = new Parser(grammar);
         var debugger = new Debug(parser, Console.Write, Console.Error.Write);

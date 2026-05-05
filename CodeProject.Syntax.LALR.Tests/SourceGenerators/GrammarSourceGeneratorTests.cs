@@ -410,6 +410,44 @@ public class GrammarSourceGeneratorTests
         Assert.Contains("BuildActions<T>(IVisitor<T> visitor)", visitorSource);
         Assert.Contains("[\"makeNum\"] = (lhs, args) => visitor.Visit(new MakeNum(args[0])),", visitorSource);
         Assert.Contains("[\"makeAdd\"] = (lhs, args) => visitor.Visit(new MakeAdd(args[0], args[1], args[2])),", visitorSource);
+
+        // Build<T>(IVisitor<T>) is the convenience wrapper around
+        // SchemaCompiler.Compile(Schema, BuildActions(visitor)) — emitted in
+        // the visitor file because it depends on the IVisitor type.
+        Assert.Contains("Build<T>(IVisitor<T> visitor)", visitorSource);
+        Assert.Contains("SchemaCompiler.Compile(Schema, BuildActions(visitor))", visitorSource);
+    }
+
+    [Fact]
+    public void NoActions_SchemaFileEmitsNoArgBuild()
+    {
+        // Even with zero actions, the schema file emits a no-arg Build() so
+        // simple grammars don't have to import SchemaCompiler at all.
+        var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.Single(trees);
+        var source = trees[0].ToString();
+        Assert.Contains("public static (global::CodeProject.Syntax.LALR.Grammar Grammar, Dictionary<string, global::CodeProject.Syntax.LALR.LexicalGrammar.LexRule[]> Lexer) Build()", source);
+        Assert.Contains("SchemaCompiler.Compile(Schema)", source);
+    }
+
+    [Fact]
+    public void Actions_SchemaAndVisitorFilesBothEmitBuild()
+    {
+        // With actions, both files contribute a Build overload to the partial
+        // class: a no-arg one in the schema file (will throw at runtime if
+        // anything names an action — present as a compile-time hint that this
+        // grammar has actions) and a typed-visitor one in the visitor file.
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.Equal(3, trees.Length);
+        var schemaSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("public static GrammarSchema Schema", StringComparison.Ordinal));
+        var visitorSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("interface IVisitor", StringComparison.Ordinal));
+
+        Assert.Contains("Build()", schemaSource);
+        Assert.Contains("Build<T>(IVisitor<T> visitor)", visitorSource);
     }
 
     [Fact]

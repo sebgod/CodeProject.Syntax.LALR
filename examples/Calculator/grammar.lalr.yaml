@@ -10,7 +10,7 @@
 #   - one ignored lexer rule (whitespace)
 #   - two production actions ⇒ two emitted records ⇒ two visitor methods
 
-symbols: [S, E, '+', n, WS]
+symbols: [S, E, '+', '-', n, WS]
 
 productions:
   - derivation: none
@@ -20,10 +20,12 @@ productions:
   - derivation: leftmost
     rules:
       - { lhs: E, rhs: [E, '+', E], action: add }
+      - { lhs: E, rhs: [E, '-', E], action: substract }
       - { lhs: E, rhs: [n],         action: number }
 
 lexer:
   root:
     - { symbol: n,   match: '[0-9]+' }
     - { symbol: '+', match: '\+' }
+    - { symbol: '-', match: '\-' }
     - { symbol: WS,  match: '[ \t]+', action: ignore }

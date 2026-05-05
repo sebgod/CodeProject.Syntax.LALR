@@ -84,6 +84,16 @@ public static class SchemaCompiler
         for (var gi = 0; gi < groupCount; gi++)
         {
             var groupSchema = schema.Productions[gi];
+            // YAML parsers can produce a list with null entries when a YAML
+            // document is incomplete or malformed (e.g. a `- ` with no body).
+            // Convert that into a proper SchemaCompilationException with a
+            // path locator instead of letting it propagate as an NRE — the
+            // lalr-tui live editor in particular hits this on every keystroke
+            // that leaves the grammar mid-edit.
+            if (groupSchema is null)
+            {
+                throw new SchemaCompilationException($"productions[{gi}] is null or empty");
+            }
             var ruleCount = groupSchema.Rules?.Count ?? 0;
             if (ruleCount == 0)
             {
@@ -93,6 +103,10 @@ public static class SchemaCompiler
             for (var ri = 0; ri < ruleCount; ri++)
             {
                 var rule = groupSchema.Rules[ri];
+                if (rule is null)
+                {
+                    throw new SchemaCompilationException($"productions[{gi}].rules[{ri}] is null or empty");
+                }
                 rules[ri] = BuildProduction(rule, symbolIds, actions, $"productions[{gi}].rules[{ri}]");
             }
             groups[gi] = new PrecedenceGroup(groupSchema.Derivation, rules);
@@ -172,7 +186,15 @@ public static class SchemaCompiler
             var compiled = new LexRule[ruleSchemas.Count];
             for (var i = 0; i < ruleSchemas.Count; i++)
             {
-                compiled[i] = BuildLexRule(ruleSchemas[i], symbolIds, knownStates, $"lexer.{stateName}[{i}]");
+                var ruleSchema = ruleSchemas[i];
+                // Same incomplete-YAML defence as in BuildGrammar — a missing
+                // rule body in a list yields a null entry; convert into a
+                // path-locating compile error rather than an NRE.
+                if (ruleSchema is null)
+                {
+                    throw new SchemaCompilationException($"lexer.{stateName}[{i}] is null or empty");
+                }
+                compiled[i] = BuildLexRule(ruleSchema, symbolIds, knownStates, $"lexer.{stateName}[{i}]");
             }
             compiledStates[stateName] = compiled;
         }

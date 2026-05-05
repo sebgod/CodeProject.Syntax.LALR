@@ -38,7 +38,7 @@ internal static class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var visitor = new JsonVisitor();
-        var (grammar, lexerTable) = SchemaCompiler.Compile(Json.Schema, Json.BuildActions(visitor));
+        var (grammar, lexerTable) = Json.Build(visitor);
         var parser = new Parser(grammar);
 
         using var lexer = PipeBytesLexer.FromString(Sample, lexerTable);

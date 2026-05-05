@@ -35,7 +35,9 @@ internal static class VisitorEmitter
         sb.AppendLine("#nullable disable");
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
+        sb.AppendLine("using CodeProject.Syntax.LALR;");
         sb.AppendLine("using CodeProject.Syntax.LALR.LexicalGrammar;");
+        sb.AppendLine("using CodeProject.Syntax.LALR.Schema;");
         sb.AppendLine();
         sb.Append("namespace ").Append(namespaceName).AppendLine(";");
         sb.AppendLine();
@@ -45,9 +47,32 @@ internal static class VisitorEmitter
         EmitVisitorInterface(sb, actions);
         sb.AppendLine();
         EmitBuildActions(sb, actions);
+        sb.AppendLine();
+        EmitBuildWithVisitor(sb);
 
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Emits a typed-visitor overload of <c>Build</c> that pairs with the
+    /// no-arg version emitted by <see cref="CodeEmitter"/>. Only present when
+    /// the schema has at least one action (this whole file is suppressed
+    /// otherwise), so the call site is consistent: actions present ⇒ pass a
+    /// visitor; no actions ⇒ no-arg.
+    /// </summary>
+    private static void EmitBuildWithVisitor(StringBuilder sb)
+    {
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Compile <see cref=\"Schema\"/> with the supplied visitor's action");
+        sb.AppendLine("    /// dictionary in one call. Equivalent to");
+        sb.AppendLine("    /// <c>SchemaCompiler.Compile(Schema, BuildActions(visitor))</c> but");
+        sb.AppendLine("    /// emitted alongside the schema so consumer code never has to import");
+        sb.AppendLine("    /// <see cref=\"SchemaCompiler\"/> directly.");
+        sb.AppendLine("    /// </summary>");
+        // global:: + fully-qualified — see CodeEmitter.EmitBuild for why.
+        sb.AppendLine("    public static (global::CodeProject.Syntax.LALR.Grammar Grammar, Dictionary<string, global::CodeProject.Syntax.LALR.LexicalGrammar.LexRule[]> Lexer) Build<T>(IVisitor<T> visitor) =>");
+        sb.AppendLine("        SchemaCompiler.Compile(Schema, BuildActions(visitor));");
     }
 
     private readonly struct ActionInfo

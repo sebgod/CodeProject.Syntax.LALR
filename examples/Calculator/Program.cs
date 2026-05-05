@@ -19,9 +19,13 @@ internal static class Program
 {
     public static async Task<int> Main()
     {
-        var (grammar, lexerTable) = SchemaCompiler.Compile(Grammar.Schema, Grammar.BuildActions(new Calc()));
+        // Grammar.Build(visitor) is generator-emitted alongside Schema /
+        // BuildActions; it wraps SchemaCompiler.Compile so consumer code
+        // never has to import that namespace directly.
+        var (grammar, lexerTable) = Grammar.Build(new Calc());
         var parser = new Parser(grammar);
-        using var lexer = PipeBytesLexer.FromString("1 + 2 + 3 + 4", lexerTable);
+        const string Input = "1 + 2 + 3 + 4 - 5";
+        using var lexer = PipeBytesLexer.FromString(Input, lexerTable);
         using var tokens = new AsyncLATokenIterator(lexer);
 
         var result = await parser.ParseInputAsync(tokens);
@@ -32,8 +36,8 @@ internal static class Program
         }
 
         var sum = (int)result.Content;
-        Console.WriteLine($"1 + 2 + 3 + 4 = {sum}");
-        return sum == 10 ? 0 : 1;
+        Console.WriteLine($"{Input} = {sum}");
+        return sum == 5 ? 0 : 1;
     }
 
     /// <summary>
@@ -53,5 +57,8 @@ internal static class Program
 
         public int Visit(Grammar.Add node) =>
             (int)node.Arg0.Content + (int)node.Arg2.Content;
+
+        public int Visit(Grammar.Substract node) =>
+            (int)node.Arg0.Content - (int)node.Arg2.Content;
     }
 }
