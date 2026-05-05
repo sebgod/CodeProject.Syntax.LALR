@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading.Tasks;
 using CodeProject.Syntax.LALR;
 using CodeProject.Syntax.LALR.LexicalGrammar;
-using Console.Lib.MathLayout;
+using DIR.Lib.MathLayout;
 using LatexGrammar;
 using static LatexGrammar.Latex;
 using CL = global::Console.Lib;
@@ -67,9 +67,9 @@ internal static class Program
         // keep the formula proportional to surrounding text.
         float fontSize = parsed.FontSize ?? resolvedMode switch
         {
-            BoxRenderMode.Sixel    => 32f,
-            BoxRenderMode.Sextant  => 12f,
-            BoxRenderMode.HalfBlock=> 10f,
+            CL.BoxRenderMode.Sixel    => 32f,
+            CL.BoxRenderMode.Sextant  => 12f,
+            CL.BoxRenderMode.HalfBlock=> 10f,
             _ => 12f,
         };
 
@@ -95,7 +95,7 @@ internal static class Program
                 }
 
                 var box = (Box)result.Content;
-                BoxRenderer.Render(box, visitor.Style, resolvedMode, SysConsole.Out);
+                CL.BoxRenderer.Render(box, visitor.Style, resolvedMode, SysConsole.Out);
             }
             catch (Exception ex)
             {
@@ -105,11 +105,11 @@ internal static class Program
         }
     }
 
-    private record ParsedArgs(BoxRenderMode? Mode, float? FontSize, string? FontPath, string? Formula);
+    private record ParsedArgs(CL.BoxRenderMode? Mode, float? FontSize, string? FontPath, string? Formula);
 
     private static ParsedArgs ParseArgs(string[] args)
     {
-        BoxRenderMode? mode = null;
+        CL.BoxRenderMode? mode = null;
         float? fontSize = null;
         string? fontPath = null;
         string? formula = null;
@@ -120,9 +120,9 @@ internal static class Program
             {
                 case "--auto":      mode = null;                     break;
                 case "--ascii":
-                case "--halfblock": mode = BoxRenderMode.HalfBlock;  break;
-                case "--sextant":   mode = BoxRenderMode.Sextant;    break;
-                case "--sixel":     mode = BoxRenderMode.Sixel;      break;
+                case "--halfblock": mode = CL.BoxRenderMode.HalfBlock;  break;
+                case "--sextant":   mode = CL.BoxRenderMode.Sextant;    break;
+                case "--sixel":     mode = CL.BoxRenderMode.Sixel;      break;
                 case "--font-size" when i + 1 < args.Length:
                     fontSize = float.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
                     break;
@@ -193,17 +193,17 @@ internal static class Program
     /// If the DA1 query fails entirely (e.g. no TTY attached), we treat
     /// that as "no sixel" and return Sextant.
     /// </summary>
-    private static async Task<BoxRenderMode> DetectModeAsync()
+    private static async Task<CL.BoxRenderMode> DetectModeAsync()
     {
         try
         {
             await using var term = new CL.VirtualTerminal();
             await term.InitAsync();
-            return term.HasSixelSupport ? BoxRenderMode.Sixel : BoxRenderMode.Sextant;
+            return term.HasSixelSupport ? CL.BoxRenderMode.Sixel : CL.BoxRenderMode.Sextant;
         }
         catch
         {
-            return BoxRenderMode.Sextant;
+            return CL.BoxRenderMode.Sextant;
         }
     }
 }

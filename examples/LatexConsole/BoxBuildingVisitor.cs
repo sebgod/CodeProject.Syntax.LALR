@@ -2,13 +2,13 @@ using System.Collections.Generic;
 using CodeProject.Syntax.LALR.LexicalGrammar;
 using LatexGrammar;
 using static LatexGrammar.Latex;
-using Console.Lib.MathLayout;
+using DIR.Lib.MathLayout;
 
 namespace Examples.LatexConsole;
 
 /// <summary>
 /// IVisitor&lt;Box&gt; implementation: maps each AST record to a TeX-lite
-/// Box composition. Pairs with <see cref="BoxRenderer"/>, which paints the
+/// Box composition. Pairs with <c>Console.Lib.BoxRenderer</c>, which paints the
 /// returned root Box into an RGBA buffer for sixel/half-block output.
 ///
 /// Atoms (Number / Variable / Command) build a <see cref="GlyphBox"/> at the

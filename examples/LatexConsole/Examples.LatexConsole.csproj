@@ -28,8 +28,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Console.Lib transitively pulls DIR.Lib (RgbaImageRenderer + ManagedFontRasterizer). -->
-    <PackageReference Include="Console.Lib" Version="2.10.501" />
+    <!--
+      Console.Lib 2.11+ exposes BoxRenderer / BoxRenderMode at top-level
+      (terminal output adapter); the actual MathLayout primitives live
+      upstream in DIR.Lib 2.7+ (Box / BoxStyle / FracBox / SqrtBox /
+      LimitsBox / etc.) and come transitively. DIR.Lib also provides the
+      RgbaImageRenderer + ManagedFontRasterizer this example uses.
+    -->
+    <PackageReference Include="Console.Lib" Version="2.11.521" />
   </ItemGroup>
 
 </Project>
