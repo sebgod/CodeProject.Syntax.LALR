@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Shared grammar library: runs the YAML source generator ONCE on
+    latex.lalr.yaml and exposes the resulting `Latex` partial class (Schema,
+    AST records, IVisitor<T>, BuildActions) in namespace Examples.Latex.Grammar.
+
+    Both Examples.Latex (Unicode-string renderer) and Examples.LatexConsole
+    (soft-font sixel/half-block renderer) ProjectReference this library, so
+    they consume IDENTICAL generated code — different visitors, one grammar.
+    That's the reusability story the source generator was built for: grammar
+    is a reusable artifact, not a per-consumer copy.
+  -->
+
+  <PropertyGroup>
+    <!--
+      Root namespace deliberately does NOT start with "Examples.Latex" — that
+      would collide with the namespace of the Examples.Latex consumer (.NET
+      namespace lookup tries to resolve the first segment relative to the
+      current namespace before falling through to `using`s, so an
+      `Examples.Latex.Grammar.Latex` reference inside `namespace Examples.Latex`
+      gets misread as the sibling sub-namespace `Examples.Latex.Latex` and
+      fails). Plain `LatexGrammar` sidesteps the collision.
+    -->
+    <RootNamespace>LatexGrammar</RootNamespace>
+    <AssemblyName>LatexGrammar</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The grammar lives next to this project in examples/Latex/. -->
+    <AdditionalFiles Include="..\Latex\latex.lalr.yaml" Link="latex.lalr.yaml" />
+  </ItemGroup>
+
+</Project>

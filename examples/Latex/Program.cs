@@ -4,6 +4,13 @@ using System.Text;
 using System.Threading.Tasks;
 using CodeProject.Syntax.LALR;
 using CodeProject.Syntax.LALR.LexicalGrammar;
+using LatexGrammar;
+// `using static` exposes the nested types of the partial Latex class
+// (IVisitor<T>, Add, Subtract, …) directly so we don't have to write
+// `Add` everywhere — the bare `Latex` identifier inside namespace
+// Examples.Latex would shadow against the enclosing namespace's last
+// segment under C# name lookup rules.
+using static LatexGrammar.Latex;
 
 namespace Examples.Latex;
 
@@ -36,7 +43,7 @@ internal static class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var renderer = new Renderer();
-        var (grammar, lexerTable) = Latex.Build(renderer);
+        var (grammar, lexerTable) = Build(renderer);
         var parser = new Parser(grammar);
 
         foreach (var src in Samples)
@@ -78,28 +85,28 @@ internal static class Program
     /// propagated up the tree via <c>Item.Content</c> so each node sees its
     /// children's already-rendered text and just decides how to glue them.
     /// </summary>
-    private sealed class Renderer : Latex.IVisitor<string>
+    private sealed class Renderer : IVisitor<string>
     {
         // Operators — we use real Unicode where it makes the formula nicer:
         // U+2212 for unary/binary minus (typographic minus, not hyphen-minus),
         // U+00B7 for multiplication (centred dot).
-        public string Visit(Latex.Add node)      => $"{node.Arg0.Content} + {node.Arg2.Content}";
-        public string Visit(Latex.Subtract node) => $"{node.Arg0.Content} − {node.Arg2.Content}";
-        public string Visit(Latex.Eq node)       => $"{node.Arg0.Content} = {node.Arg2.Content}";
-        public string Visit(Latex.Mul node)      => $"{node.Arg0.Content}·{node.Arg2.Content}";
-        public string Visit(Latex.Div node)      => $"{node.Arg0.Content}/{node.Arg2.Content}";
-        public string Visit(Latex.Juxt node)     => $"{node.Arg0.Content}{node.Arg1.Content}";
-        public string Visit(Latex.Neg node)      => $"−{node.Arg1.Content}";
+        public string Visit(Add node)      => $"{node.Arg0.Content} + {node.Arg2.Content}";
+        public string Visit(Subtract node) => $"{node.Arg0.Content} − {node.Arg2.Content}";
+        public string Visit(Eq node)       => $"{node.Arg0.Content} = {node.Arg2.Content}";
+        public string Visit(Mul node)      => $"{node.Arg0.Content}·{node.Arg2.Content}";
+        public string Visit(Div node)      => $"{node.Arg0.Content}/{node.Arg2.Content}";
+        public string Visit(Juxt node)     => $"{node.Arg0.Content}{node.Arg1.Content}";
+        public string Visit(Neg node)      => $"−{node.Arg1.Content}";
 
         // Scripts: try Unicode super/subscripts when the argument is short and
         // every codepoint has a Unicode form. Otherwise fall back to caret /
         // underscore notation with parens around multi-token arguments.
-        public string Visit(Latex.Sup node) =>
+        public string Visit(Sup node) =>
             TryUnicodeScript((string)node.Arg2.Content, Superscripts, out var sup)
                 ? $"{node.Arg0.Content}{sup}"
                 : $"{node.Arg0.Content}^{Wrap((string)node.Arg2.Content)}";
 
-        public string Visit(Latex.Subscript node) =>
+        public string Visit(Subscript node) =>
             TryUnicodeScript((string)node.Arg2.Content, Subscripts, out var sub)
                 ? $"{node.Arg0.Content}{sub}"
                 : $"{node.Arg0.Content}_{Wrap((string)node.Arg2.Content)}";
@@ -108,21 +115,21 @@ internal static class Program
         // their lexer-matched bytes. \name commands are looked up in a Greek/
         // operator/function table; unknown commands keep their backslash form
         // so the user can see exactly what didn't render.
-        public string Visit(Latex.Number node)   => (string)node.Arg0.Content;
-        public string Visit(Latex.Variable node) => (string)node.Arg0.Content;
-        public string Visit(Latex.Command node)  => RenderCommand((string)node.Arg0.Content);
+        public string Visit(Number node)   => (string)node.Arg0.Content;
+        public string Visit(Variable node) => (string)node.Arg0.Content;
+        public string Visit(Command node)  => RenderCommand((string)node.Arg0.Content);
 
         // Brackets. Parens stay visible; braces are LaTeX's "invisible group"
         // so we drop them in the rendering and just return the inner E.
-        public string Visit(Latex.Paren node) => $"({node.Arg1.Content})";
-        public string Visit(Latex.Group node) => (string)node.Arg1.Content;
+        public string Visit(Paren node) => $"({node.Arg1.Content})";
+        public string Visit(Group node) => (string)node.Arg1.Content;
 
         // \sqrt and \frac. The radical glyph U+221A renders without an overbar
         // in plain text, so we wrap multi-token arguments in parens for clarity.
         // U+2044 is the fraction slash — distinct from solidus '/', so the
         // reader can tell `\frac{1}{2}` (½-style) from `1/2` (raw division).
-        public string Visit(Latex.Sqrt node) => $"√{Wrap((string)node.Arg1.Content)}";
-        public string Visit(Latex.Frac node) => $"{Wrap((string)node.Arg1.Content)}⁄{Wrap((string)node.Arg2.Content)}";
+        public string Visit(Sqrt node) => $"√{Wrap((string)node.Arg1.Content)}";
+        public string Visit(Frac node) => $"{Wrap((string)node.Arg1.Content)}⁄{Wrap((string)node.Arg2.Content)}";
 
         /// <summary>
         /// Wrap a sub-expression in parens if it contains anything that would

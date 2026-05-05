@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Renders the Wikipedia-style LaTeX math grammar from examples/Latex with
+    proper math typography — TTF glyphs rasterized via DIR.Lib, composited
+    into an RGBA buffer with TeX-lite box layout (fraction bars sized to
+    numerator/denominator, scalable square-root vinculums, baseline-aligned
+    sub/superscripts), then output as either Sixel (sixel-capable terminals:
+    WT 1.22+, iTerm2, mintty, xterm +sixel) or 24-bit-colour half-block
+    ASCII art via Console.Lib.AsciiRenderer for everything else.
+
+    The grammar + generated `Latex` partial class lives in the sibling
+    Latex.Grammar library — a single source-generator run shared between this
+    project and Examples.Latex (the Unicode-string renderer). One grammar,
+    multiple visitors: the reusability story the source generator was built
+    for, demonstrated end-to-end.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Examples.LatexConsole</RootNamespace>
+    <AssemblyName>Examples.LatexConsole</AssemblyName>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Latex.Grammar\Latex.Grammar.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Console.Lib transitively pulls DIR.Lib (RgbaImageRenderer + ManagedFontRasterizer). -->
+    <PackageReference Include="Console.Lib" Version="2.10.501" />
+  </ItemGroup>
+
+</Project>
