@@ -92,6 +92,18 @@ Patterns to follow when adding or editing tests:
 - Pass `TestContext.Current.CancellationToken` to async APIs that accept a `CancellationToken` (xUnit1051). `TestContext.Current` is a static accessor unique to xUnit v3.
 - xUnit `Assert.Equal(expected, actual)` argument order is **opposite** to NUnit's `Assert.That(actual, Is.EqualTo(expected))`. Watch the diagnostics — getting it backwards still passes, just shows confusing diff output on failures.
 
+## Examples are stress tests, not safe demos
+
+The grammars under `examples/` exist to **exercise the parser/generator pipeline against shapes that haven't come up before** — not just to look pretty. When an example uncovers a runtime bug (parse table misroute, AOT warning, generator diagnostic gap, lexer edge case), the fix goes into the runtime/generator/library, not into the example's grammar. Working around a bug at the grammar level (e.g. inserting a terminal between two non-terminals to dodge a state-tracking quirk in `Parser.ParseInputAsync`) hides the problem from the *next* user who writes a grammar with that shape, defeating the point of having the example in the first place.
+
+Concretely:
+- If a natural-looking grammar fails to parse, **trace the parser** (`new Debug(parser, Console.Out.Write, Console.Error.Write)`) and find the misbehaving table cell, code path, or table-construction step. Fix it there.
+- If `dotnet publish -c Release` emits an AOT trim warning on an example, fix the warning in the runtime (or annotate the API), not by turning AOT off in the example.
+- If the source generator produces awkward emitted code that an example has to paper over, fix the emitter in `CodeProject.Syntax.LALR.SourceGenerators/`.
+- Add a regression test alongside the fix so the case is locked in independently of the example.
+
+The Wikipedia-style LaTeX example (`examples/Latex/`) is the current poster child: its `A -> cmdfrac A A` rule (two non-terminals adjacent in an RHS, separated only by whatever sits inside their internal `{ E }` reductions) was the first grammar to expose a long-standing latent bug where `Parser.cs` stashed `production.Left` (LHS symbol id) on a reduction's `Item.State` instead of the goto-target parser state — the next reduction's `lastState = Peek().State` then mis-routed the goto. The fix landed in `Parser.cs`/`Debug.cs` rather than rewriting the LaTeX grammar.
+
 ## Known tech debt
 
 - **Productions still embed semantic actions.** `Production` carries a `Func<int, Item[], object>` rewriter, so grammar definitions and code are entangled. Future direction is a typed AST + visitor split with grammar definitions in YAML; don't double down on the rewriter pattern in new grammars.

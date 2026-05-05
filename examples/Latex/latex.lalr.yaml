@@ -1,0 +1,157 @@
+# LaTeX math-mode grammar — a Wikipedia-style formula subset (NOT full LaTeX).
+# Targets the kind of inline math you'd typeset in a Wikipedia article:
+# fractions, square roots, scripts, Greek letters, big operators, and the
+# usual arithmetic/relational operators. Prose, environments, alignments,
+# colour, and macro definitions are deliberately out of scope — those belong
+# to a real LaTeX engine, not a four-file LALR(1) demo.
+#
+# Things that work:
+#   E = mc^2
+#   e^{i\pi} + 1 = 0
+#   \frac{1}{2} + \frac{1}{3}
+#   \sqrt{x^2 + y^2}
+#   \sum_{i=0}^{n} i = \frac{n(n+1)}{2}
+#   \sin(\alpha + \beta) = \sin\alpha \cos\beta + \cos\alpha \sin\beta
+#
+# Things that don't:
+#   - Optional \sqrt[n]{x} (n-th root) — square brackets aren't atoms here.
+#   - \begin{...}\end{...} environments, alignments, multi-line displays.
+#   - Macro definitions (\def, \newcommand) and any TeX programming.
+#   - String content inside \text{...} (treated as opaque \cmd).
+#   - Implicit prefix unary minus inside group-arguments without parens
+#     (e.g. \frac{-1}{2} works because -1 reduces via F -> '-' F, but
+#     \sqrt -2 does not — write \sqrt{-2}).
+#   - Multi-letter "function names" like \sin or \cos are kept as opaque
+#     `cmd` atoms; the visitor maps them to readable text. The grammar does
+#     not enforce arity (\sin x parses as juxtaposition), which matches how
+#     LaTeX itself handles them.
+#
+# Precedence (lowest to highest):
+#   E:  + - =                                            (additive/relational, leftmost)
+#   T:  * /, juxtaposition (T F2)                        (multiplicative, leftmost)
+#   F:  unary -                                          (right-associative)
+#   F2: P                                                (factor without unary — used by
+#                                                         juxtaposition so that "1-2"
+#                                                         doesn't parse as 1·(-2))
+#   P:  ^ _                                              (postfix scripts, leftmost)
+#   A:  atoms (numbers, identifiers, commands, groups, parens, \frac, \sqrt)
+#
+# The split between F (unary minus allowed) and F2 (no unary) is what keeps
+# LALR(1) happy. Juxtaposition uses F2 so the parser can never "see" a leading
+# `-` as starting a juxtaposed factor — that disambiguates the classic
+# "1 - 2" vs. "1·(-2)" S/R conflict cleanly without any precedence hack.
+
+symbols:
+  - S          # 0  start
+  - E          # 1  expression (additive/relational)
+  - T          # 2  term (multiplicative + juxtaposition)
+  - F          # 3  factor (unary minus allowed)
+  - F2         # 4  factor without unary minus (used by juxtaposition)
+  - P          # 5  postfix-script wrapper
+  - A          # 6  atom
+  - '+'        # 7
+  - '-'        # 8
+  - '*'        # 9   matched by raw '*' or by \cdot / \times
+  - '/'        # 10
+  - '='        # 11
+  - '^'        # 12
+  - '_'        # 13
+  - '('        # 14
+  - ')'        # 15
+  - '{'        # 16
+  - '}'        # 17
+  - n          # 18  number literal
+  - id         # 19  single-letter identifier (math-italic variable)
+  - cmd        # 20  catchall \name — Greek letters, function names, big operators
+  - cmdfrac    # 21  \frac (binds two atom arguments)
+  - cmdsqrt    # 22  \sqrt (binds one atom argument)
+  - WS         # 23  whitespace (ignored)
+
+productions:
+  # Start production. Single-non-terminal so it trims at parse time and the
+  # root Item carries the same content as E — the visitor never sees this rule.
+  - derivation: none
+    rules:
+      - { lhs: S, rhs: [E] }
+
+  # Additive / relational. `=` is folded in here at the lowest precedence so
+  # `a + b = c + d` parses as expected; mathematicians can quibble.
+  - derivation: leftmost
+    rules:
+      - { lhs: E, rhs: [E, '+', T], action: add }
+      - { lhs: E, rhs: [E, '-', T], action: subtract }
+      - { lhs: E, rhs: [E, '=', T], action: eq }
+      - { lhs: E, rhs: [T] }
+
+  # Multiplicative + juxtaposition. The `T -> T F2` rule is the implicit-
+  # multiplication slot ("xy" = "x · y", "n(n+1)" = "n · (n+1)") and uses
+  # F2 (no unary) so juxtaposition can never absorb a subsequent `-`.
+  - derivation: leftmost
+    rules:
+      - { lhs: T, rhs: [T, '*', F],  action: mul }
+      - { lhs: T, rhs: [T, '/', F],  action: div }
+      - { lhs: T, rhs: [T, F2],      action: juxt }
+      - { lhs: T, rhs: [F] }
+
+  # Unary minus. Right-associative: `--x` is `-(-x)`. Group derivation is
+  # rightmost mostly for documentation — there's no real ambiguity to resolve
+  # since unary minus only appears at the head of an F.
+  - derivation: rightmost
+    rules:
+      - { lhs: F, rhs: ['-', F], action: neg }
+      - { lhs: F, rhs: [F2] }
+
+  - derivation: none
+    rules:
+      - { lhs: F2, rhs: [P] }
+
+  # Postfix scripts. Left-associative — `x^2^3` parses as `(x^2)^3`. (Real
+  # LaTeX flags this as a "double superscript" error; we just accept it.)
+  - derivation: leftmost
+    rules:
+      - { lhs: P, rhs: [P, '^', A], action: sup }
+      - { lhs: P, rhs: [P, '_', A], action: subscript }
+      - { lhs: P, rhs: [A] }
+
+  # Atoms — leaves of the expression tree. \frac and \sqrt take A-typed
+  # arguments, which means both `\frac 1 2` and `\frac{1}{2}` parse: in the
+  # second case each `{ E }` is itself an A via the `group` rule. That's the
+  # same "single token or braced group" rule LaTeX itself uses for command
+  # arguments — kept verbatim so this example can stress-test the parser
+  # against grammars where two non-terminals sit adjacent in an RHS.
+  - derivation: none
+    rules:
+      - { lhs: A, rhs: [n],                action: number }
+      - { lhs: A, rhs: [id],               action: variable }
+      - { lhs: A, rhs: [cmd],              action: command }
+      - { lhs: A, rhs: ['(', E, ')'],      action: paren }
+      - { lhs: A, rhs: ['{', E, '}'],      action: group }
+      - { lhs: A, rhs: [cmdsqrt, A],       action: sqrt }
+      - { lhs: A, rhs: [cmdfrac, A, A],    action: frac }
+
+# Single lexer state. Ordering matters: `\frac` and `\sqrt` (and the explicit
+# multiplication aliases `\cdot` / `\times`) must come before the `\\[a-zA-Z]+`
+# catchall so first-rule-wins picks them on identical-length matches. (Longer
+# real names like `\fraction` would still win via longest-match — they fall
+# through to `cmd` as opaque atoms, which is what we want.)
+lexer:
+  root:
+    - { symbol: cmdfrac, match: '\\frac' }
+    - { symbol: cmdsqrt, match: '\\sqrt' }
+    - { symbol: '*',     match: '\\cdot' }
+    - { symbol: '*',     match: '\\times' }
+    - { symbol: cmd,     match: '\\[a-zA-Z]+' }
+    - { symbol: n,       match: '[0-9]+(\.[0-9]+)?' }
+    - { symbol: id,      match: '[a-zA-Z]' }
+    - { symbol: '+',     match: '\+' }
+    - { symbol: '-',     match: '\-' }
+    - { symbol: '*',     match: '\*' }
+    - { symbol: '/',     match: '/' }
+    - { symbol: '=',     match: '=' }
+    - { symbol: '^',     match: '\^' }
+    - { symbol: '_',     match: '_' }
+    - { symbol: '(',     match: '\(' }
+    - { symbol: ')',     match: '\)' }
+    - { symbol: '{',     match: '\{' }
+    - { symbol: '}',     match: '\}' }
+    - { symbol: WS,      match: '[ \t\r\n]+', action: ignore }

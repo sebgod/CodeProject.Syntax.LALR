@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Example project: a Wikipedia-style LaTeX math grammar driven by the YAML
+    source generator. Same wiring shape as examples/Json (analyzer ProjectReference
+    + YamlDotNet PackageReference + <Analyzer Include="$(PkgYamlDotNet)\..."> hook).
+    PublishAot is intentionally off — flip it on if you want to verify AOT
+    cleanliness, but the demo is meant for a quick `dotnet run`.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Examples.Latex</RootNamespace>
+    <AssemblyName>Examples.Latex</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <ProjectReference Include="..\..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="17.1.0" GeneratePathProperty="true" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="$(PkgYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- latex.lalr.yaml -> partial class Latex in Examples.Latex. -->
+    <AdditionalFiles Include="latex.lalr.yaml" />
+  </ItemGroup>
+
+</Project>

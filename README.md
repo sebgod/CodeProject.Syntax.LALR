@@ -12,7 +12,7 @@ that a Roslyn source generator turns into a typed schema, AST records, and a
 visitor surface at build time.
 
 > **Status (May 2026):** .NET 10, C# 14, Native AOT-clean, xUnit v3 test suite
-> (283 tests). Library code is allocation-light, reflection-free, and trim-/AOT-
+> (304 tests). Library code is allocation-light, reflection-free, and trim-/AOT-
 > compatible. Single NuGet package ships the runtime *and* the source generator.
 
 ---
@@ -65,7 +65,7 @@ class Calc : Grammar.IVisitor<int>
     public int Visit(Grammar.Add node)    => (int)node.Arg0.Content + (int)node.Arg2.Content;
 }
 
-var (g, lex) = SchemaCompiler.Compile(Grammar.Schema, Grammar.BuildActions(new Calc()));
+var (g, lex) = Grammar.Build(new Calc());
 var parser = new Parser(g);
 using var lexer = PipeBytesLexer.FromString("1 + 2 + 3 + 4", lex);
 using var tokens = new AsyncLATokenIterator(lexer);
@@ -76,7 +76,9 @@ Console.WriteLine(result.Content);  // 10
 The full working version is in [`examples/Calculator/`](examples/Calculator).
 For a non-toy example see [`examples/Json/`](examples/Json) — a real JSON
 parser in ~50 visitor lines that builds `Dictionary<string,object>` /
-`List<object>` / primitives.
+`List<object>` / primitives. [`examples/Latex/`](examples/Latex) renders
+Wikipedia-style math formulas (\frac, \sqrt, scripts, Greek letters, big
+operators) to Unicode plain text — `\frac{n(n+1)}{2}` → `(n(n + 1))⁄2`.
 
 ---
 
@@ -126,9 +128,10 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `Bootstrap/` | Exe (`PublishAot=true`) | **Stage 0**: hand-codes the BNF meta-grammar in C# and parses a BNF source string with the resulting parser. Reference implementation — depends only on the runtime library, no generator, no YAML. |
 | `Bootstrap.Stage1/` | Exe (`PublishAot=true`) | **Stage 1**: same BNF meta-grammar, but defined in `bnf.lalr.yaml` and consumed via the source generator + visitor pipeline. CI diffs stage0 ↔ stage1 Accept output for byte-identical parity. |
 | `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression demo with operator precedence and constant folding during reduction. Inline C# grammar; uses an inline tokenizer instead of `PipeBytesLexer` to show that any `IAsyncIterator<Item>` plugs in. |
-| `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a 5-symbol calculator grammar (`1 + 2 + 3 + 4 = 10`) with two visitor methods. Mirrors the README quick-start. |
+| `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a calculator grammar (`1 + 2 + 3 + 4 - 5 = 5`) with three visitor methods. Mirrors the README quick-start. |
 | `examples/Json/` | Exe | Real JSON parser via the YAML pipeline. ~50-line `IVisitor` implementation builds `Dictionary<string,object>` / `List<object>` / primitives. |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 283 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
+| `examples/Latex/` | Exe | Wikipedia-style LaTeX math formulas. Six-level precedence grammar (additive → multiplicative + juxtaposition → unary → scripts → atoms) covering `\frac`, `\sqrt`, super/subscripts, parens, Greek letters and big-operator commands; visitor renders to Unicode plain text. |
+| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 304 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic
 build, etc.) live in `Directory.Build.props`. NuGet metadata, symbol packages,
@@ -343,6 +346,30 @@ canonical "non-toy grammar end-to-end via the new pipeline" reference. Lexer
 limitations (no backslash escapes inside strings) are documented in the YAML
 header.
 
+### `examples/Latex` — Wikipedia-style math formulas
+
+`latex.lalr.yaml` plus an `IVisitor<string>` that pretty-prints to Unicode.
+Six precedence levels (`E → T → F → F2 → P → A`) with a deliberate F/F2
+split so that juxtaposition (`mc^2`, `n(n+1)`) coexists with subtraction
+without an S/R conflict. Handles `\frac{a}{b}`, `\sqrt{x}`, `^` / `_`
+scripts, `()` / `{}` grouping, and a catchall `\name` lexer rule fed by a
+Greek/operator/function table — `\sum`, `\int`, `\alpha`, `\sin`, `\infty`,
+etc. Sample input/output pairs:
+
+```
+\frac{1}{2} + \frac{1}{3}            →  1⁄2 + 1⁄3
+\sqrt{x^2 + y^2}                     →  √(x² + y²)
+\sum_{i=0}^{n} i = \frac{n(n+1)}{2}  →  ∑_(i = 0)ⁿi = (n(n + 1))⁄2
+\int_0^\infty e^{-x^2} dx            →  ∫₀^∞e^(−x²)dx
+```
+
+Doubles as a stress test for the parser: its `A → cmdfrac A A` rule (two
+non-terminals adjacent in an RHS) was the first grammar to surface a long-
+standing latent bug in `Parser.cs` where reductions stashed the LHS symbol
+id on `Item.State` instead of the goto-target parser state, mis-routing
+`Peek().State` lookups when one reduction sat below another reduction's
+children. See `CLAUDE.md` § "Examples are stress tests, not safe demos".
+
 ---
 
 ## Building, testing, releasing
@@ -351,7 +378,7 @@ header.
 # Build the whole solution
 dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
 
-# Run all tests (xUnit v3 on Microsoft.Testing.Platform — 283 tests)
+# Run all tests (xUnit v3 on Microsoft.Testing.Platform — 304 tests)
 dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
 
 # Run a subset of tests (MTP --filter-method, glob-syntax)
@@ -361,8 +388,9 @@ dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests
 dotnet run --project Bootstrap/Bootstrap.csproj                    -c Release    # stage 0 (inline grammar)
 dotnet run --project Bootstrap.Stage1/Bootstrap.Stage1.csproj      -c Release    # stage 1 (YAML pipeline)
 dotnet run --project TestProject/TestProject.csproj                -c Release    # arithmetic + constant folding
-dotnet run --project examples/Calculator/Examples.Calculator.csproj -c Release   # minimal YAML demo
+dotnet run --project examples/Calculator/Examples.Calculator.csproj -c Release  # minimal YAML demo
 dotnet run --project examples/Json/Examples.Json.csproj            -c Release    # real JSON via visitor
+dotnet run --project examples/Latex/Examples.Latex.csproj          -c Release    # Wikipedia-style math → Unicode
 
 # Native AOT publish (verifies library + demos stay AOT-clean)
 dotnet publish Bootstrap/Bootstrap.csproj                -c Release
