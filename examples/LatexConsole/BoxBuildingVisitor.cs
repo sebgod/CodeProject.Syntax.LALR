@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using CodeProject.Syntax.LALR.LexicalGrammar;
 using LatexGrammar;
 using static LatexGrammar.Latex;
+using DIR.Lib;
 using DIR.Lib.MathLayout;
 
 namespace Examples.LatexConsole;
@@ -53,18 +54,33 @@ public sealed class BoxBuildingVisitor : IVisitor<Box>
     public Box Visit(Neg node) =>
         new HBox(new GlyphBox("−", Style), Child(node.Arg1));
 
-    /// <summary>Postfix superscript: shrink-and-raise the second argument.</summary>
+    /// <summary>
+    /// Postfix superscript. For ordinary atoms, builds a right-of-operator
+    /// <see cref="SupSubBox"/>. For big operators (∫ ∑ ∏ etc.), folds into
+    /// a <see cref="LimitsBox"/> so the script lands above the operator —
+    /// what TeX does in display style for <c>\int^a</c>, <c>\sum^n</c>.
+    /// Stacking <c>\int_0^\infty</c> works because each Sup/Subscript visit
+    /// preserves the <see cref="BigOpScaffold"/>: the first script wraps
+    /// the bare operator into a scaffold, the second slots into the same
+    /// scaffold's other slot.
+    /// </summary>
     public Box Visit(Sup node)
     {
         var smaller = Style.Smaller();
-        return new SupSubBox(Child(node.Arg0), sup: ReBuild(node.Arg2, smaller), sub: null, Style);
+        var baseBox = Child(node.Arg0);
+        if (baseBox is BigOpScaffold scaffold && !scaffold.HasUpper)
+            return scaffold.WithUpper(ReBuild(node.Arg2, smaller));
+        return new SupSubBox(baseBox, sup: ReBuild(node.Arg2, smaller), sub: null, Style);
     }
 
-    /// <summary>Postfix subscript: shrink-and-lower.</summary>
+    /// <summary>Postfix subscript. Mirror of <see cref="Visit(Sup)"/>.</summary>
     public Box Visit(Subscript node)
     {
         var smaller = Style.Smaller();
-        return new SupSubBox(Child(node.Arg0), sup: null, sub: ReBuild(node.Arg2, smaller), Style);
+        var baseBox = Child(node.Arg0);
+        if (baseBox is BigOpScaffold scaffold && !scaffold.HasLower)
+            return scaffold.WithLower(ReBuild(node.Arg2, smaller));
+        return new SupSubBox(baseBox, sup: null, sub: ReBuild(node.Arg2, smaller), Style);
     }
 
     public Box Visit(Number node) => new GlyphBox((string)node.Arg0.Content, Style);
@@ -80,6 +96,13 @@ public sealed class BoxBuildingVisitor : IVisitor<Box>
         var raw = (string)node.Arg0.Content;
         var name = raw.Length > 1 && raw[0] == '\\' ? raw.Substring(1) : raw;
         var glyph = Commands.TryGetValue(name, out var g) ? g : raw;
+        if (LimitOps.Contains(name))
+        {
+            // Display-style big operator: render the glyph at 1.5x and wrap
+            // in a scaffold so subsequent _/^ scripts fold into a LimitsBox
+            // (limits above/below) instead of a SupSubBox (right-of).
+            return new BigOpScaffold(new GlyphBox(glyph, Style, Style.FontSize * 1.5f), null, null, Style);
+        }
         return new GlyphBox(glyph, Style);
     }
 
@@ -165,4 +188,63 @@ public sealed class BoxBuildingVisitor : IVisitor<Box>
         ["in"] = "∈", ["notin"] = "∉", ["subset"] = "⊂",
         ["cup"] = "∪", ["cap"] = "∩",
     };
+
+    /// <summary>
+    /// Commands that take their <c>_</c>/<c>^</c> as below/above limits in
+    /// display style (the LimitsBox rendering) rather than as right-of
+    /// scripts. Big operators (∑ ∏ ∫ ∮ ⋃ ⋂) plus the limit-style functions
+    /// (lim sup inf max min etc.).
+    /// </summary>
+    private static readonly HashSet<string> LimitOps = new(System.StringComparer.Ordinal)
+    {
+        "sum", "prod", "int", "oint", "bigcup", "bigcap",
+        "lim", "limsup", "liminf", "max", "min", "sup", "inf",
+        "argmax", "argmin", "det", "gcd",
+    };
+
+    /// <summary>
+    /// Transient marker box: a big operator that hasn't yet absorbed its
+    /// scripts. <see cref="Visit(Sup)"/> and <see cref="Visit(Subscript)"/>
+    /// look for this on their base — if found, they fold the script into
+    /// this scaffold's empty slot and return a new scaffold (still itself
+    /// a Box, materialising into a <see cref="LimitsBox"/> on demand). The
+    /// double-script case <c>\int_0^\infty</c> walks Subscript-then-Sup
+    /// (or Sup-then-Subscript) over the same scaffold, ending with both
+    /// slots filled before any consumer asks for Width/Height/Draw.
+    ///
+    /// Standalone <c>\sum</c> (no scripts) flows through unchanged: the
+    /// scaffold materialises to a LimitsBox with both slots null, which
+    /// just renders the centred operator with no limits.
+    /// </summary>
+    private sealed class BigOpScaffold : Box
+    {
+        private readonly Box _base;
+        private readonly Box? _lower;
+        private readonly Box? _upper;
+        private readonly BoxStyle _style;
+        private LimitsBox? _materialized;
+
+        public BigOpScaffold(Box @base, Box? lower, Box? upper, BoxStyle style)
+        {
+            _base = @base;
+            _lower = lower;
+            _upper = upper;
+            _style = style;
+        }
+
+        public bool HasLower => _lower is not null;
+        public bool HasUpper => _upper is not null;
+
+        public BigOpScaffold WithLower(Box lower) => new(_base, lower, _upper, _style);
+        public BigOpScaffold WithUpper(Box upper) => new(_base, _lower, upper, _style);
+
+        private LimitsBox Materialize() => _materialized ??= new LimitsBox(_base, _lower, _upper, _style);
+
+        public override float Width => Materialize().Width;
+        public override float Height => Materialize().Height;
+        public override float Depth => Materialize().Depth;
+
+        public override void Draw(RgbaImageRenderer renderer, float penX, float baselineY, BoxStyle style)
+            => Materialize().Draw(renderer, penX, baselineY, style);
+    }
 }
