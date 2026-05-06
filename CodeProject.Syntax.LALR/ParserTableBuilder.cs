@@ -46,33 +46,36 @@ public sealed class ParserTableBuilder
 
     public ParseTable ParseTable => _parseTable;
 
-    public HashSet<int>[] FirstSets => _firstSets;
+    public IReadOnlyList<HashSet<int>> FirstSets => _firstSets;
 
-    public IList<LR0Item> LR0Items => _lr0Items;
+    public IReadOnlyList<LR0Item> LR0Items => _lr0Items;
 
-    public IList<LR1Item> LR1Items => _lr1Items;
+    public IReadOnlyList<LR1Item> LR1Items => _lr1Items;
 
-    public ICollection<HashSet<int>> LR0States => _lr0States;
+    public IReadOnlyList<HashSet<int>> LR0States => _lr0States;
 
-    public ICollection<HashSet<int>> LR0Kernels => _lr0Kernels;
+    public IReadOnlyList<HashSet<int>> LR0Kernels => _lr0Kernels;
 
-    public ICollection<HashSet<int>> LALRStates => _lalrStates;
+    public IReadOnlyList<HashSet<int>> LALRStates => _lalrStates;
 
-    public ICollection<int[]> LRGotos => _lrGotos;
+    public IReadOnlyList<int[]> LRGotos => _lrGotos;
 
-    public ICollection<int[]> GotoPrecedence => _gotoPrecedence;
+    public IReadOnlyList<int[]> GotoPrecedence => _gotoPrecedence;
 
-    public IList<Production> Productions => _productions;
+    public IReadOnlyList<Production> Productions => _productions;
 
-    public ISet<int> Terminals => _terminals;
+    // Concrete HashSet<int> rather than IReadOnlySet<int>: the latter is .NET 5+
+    // and this class is `<Compile Link>`-shared into the netstandard2.0 source
+    // generator. HashSet keeps Contains() available for Debug.cs / consumers.
+    public HashSet<int> Terminals => _terminals;
 
-    public ISet<int> NonTerminals => _nonterminals;
+    public HashSet<int> NonTerminals => _nonterminals;
 
-    public IList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations => _lalrPropogations;
+    public IReadOnlyList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations => _lalrPropogations;
 
-    public ICollection<int> ProductionPrecedence => _productionPrecedence;
+    public IReadOnlyList<int> ProductionPrecedence => _productionPrecedence;
 
-    public ICollection<Derivation> ProductionDerivation => _productionDerivation;
+    public IReadOnlyList<Derivation> ProductionDerivation => _productionDerivation;
 
     public IReadOnlyList<GrammarConflict> Conflicts => _conflicts;
 
