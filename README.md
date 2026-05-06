@@ -464,27 +464,23 @@ commit, tag `vX.Y.Z` matching the version, push the tag.
 
 The project is usable as-is and on NuGet. Items still on the list, ranked:
 
-- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Slices 1–5
-  landed: the generator runs `ParserTableBuilder` at build time and emits a
-  populated `Grammar` + `ParseTable` literal into `<Name>.Tables.g.cs`
-  alongside the schema, so consumers can call `MyGrammar.BuildParser()` and
-  get a `Parser` with no table-build code reachable — the trimmer can drop
-  `ParserTableBuilder` and its LR0/LR1 helpers from the AOT image. The
-  visitor-aware overload `MyGrammar.BuildParser<T>(IVisitor<T>)` (emitted in
-  `<Name>.Visitor.g.cs` alongside the visitor surface) walks the pre-baked
-  `Definition` and splices the visitor's rewriters into the productions that
-  declared an `action:`, reusing the same pre-baked `ParseTable` — same trim
-  win, full visitor wiring. All in-tree consumers (`Bootstrap.Stage1`,
-  `Examples.Calculator` / `.Json` / `.Latex` / `.LatexConsole`) now route
-  through `BuildParser(visitor)`; the lexer half still goes through
-  `Build(visitor)` until slice 6 pre-bakes that too. Unresolved S/R + R/R
-  conflicts surface as `LALR0004` Roslyn diagnostics at build time (with
-  YAML locator) instead of `GrammarConflictException` at first
-  `new Parser(grammar)`. Both modes coexist — runtime-build via
-  `new Parser(grammar)` still works (used by `lalr-tui` which loads
-  arbitrary YAML at runtime). Outstanding: optional slice 6 (pre-bake the
-  lexer too — link `IRxParser` + the `IRx` AST into the netstandard2.0
-  generator and emit `LexRule[]` literals).
+- **Phase 5 — pre-baked parse tables and lexer (compiler-compiler mode) [done].**
+  All six slices shipped. The generator runs `ParserTableBuilder` *and* the
+  regex-to-`IRx` parser at build time, emitting populated `Grammar` +
+  `ParseTable` + `LexRule[]` literals into `<Name>.Tables.g.cs` and
+  `<Name>.Lexer.g.cs` alongside the schema. Consumers call
+  `MyGrammar.BuildParser()` + `MyGrammar.BuildLexer()` (or the visitor-aware
+  `BuildParser<T>(IVisitor<T>)` overload that splices rewriters into the
+  pre-baked grammar) and get a working pipeline with `ParserTableBuilder` /
+  `IRxParser` / the runtime DFA-builder all unreachable — the trimmer drops
+  them from the AOT image. All in-tree consumers (`Bootstrap.Stage1`,
+  `Examples.Calculator` / `.Json` / `.Latex` / `.LatexConsole`) route
+  through this path. Build-time diagnostics: `LALR0004` for unresolved S/R +
+  R/R conflicts; `LALR0005` for malformed `match:` regexes — both with YAML
+  file locators, replacing the old "boom on first parse" runtime exceptions.
+  Both modes still coexist — runtime-build via `new Parser(grammar)` +
+  `SchemaCompiler.Compile` still works and is used by `lalr-tui`, which
+  loads arbitrary user-supplied YAML at runtime.
 - **Generator-time regex validation.** Slice 1 of generator-time validation
   (`LALR0003` — structural errors via `SchemaValidator`) shipped in 2.1.0.
   Linking `IRxParser` into the generator would surface bad `match:` regexes
