@@ -79,6 +79,21 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Phase 5 / slice 6: a <c>match:</c> regex couldn't be parsed by the
+    /// build-time regex parser. Mirrors the runtime <see cref="System.FormatException"/>
+    /// the lexer-rule compiler throws when it hits the same input — surfacing it
+    /// as a Roslyn diagnostic turns "boom on first lex" into a build-time
+    /// squiggle with the offending pattern + position.
+    /// </summary>
+    private static readonly DiagnosticDescriptor InvalidLexerRegexDescriptor = new(
+        id: "LALR0005",
+        title: "Invalid LALR lexer regex",
+        messageFormat: "{0}: lexer.{1}[{2}].match \"{3}\": {4}",
+        category: "CodeProject.Syntax.LALR.SourceGenerators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // The consumer's RootNamespace (csproj <RootNamespace>) lands as a
@@ -223,6 +238,35 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         if (visitorSource != null)
         {
             context.AddSource(className + ".Visitor.g.cs", SourceText.From(visitorSource, Encoding.UTF8));
+        }
+
+        // Phase 5 / slice 6: pre-bake the lexer table. Only attempt when LALR0003
+        // structural validation already passed — otherwise schema-level breakage
+        // (unknown symbol references in lexer rules, missing root state) would
+        // get a confusing pile of LALR0005 noise on top of the real problem.
+        if (validationErrors.Count == 0)
+        {
+            var lexerEmit = LexerEmitter.Emit(schema, rootNamespace, className);
+            if (lexerEmit.HasErrors)
+            {
+                foreach (var err in lexerEmit.Errors!)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidLexerRegexDescriptor,
+                        Location.Create(path, default, default),
+                        Path.GetFileName(path),
+                        err.State,
+                        err.RuleIndex,
+                        err.Match,
+                        err.Message));
+                }
+            }
+            else if (lexerEmit.HasSource)
+            {
+                context.AddSource(className + ".Lexer.g.cs", SourceText.From(lexerEmit.Source!, Encoding.UTF8));
+            }
+            // Skipped (DidEmit == false) means LALR0003 already owns the diagnosis;
+            // we just don't emit a Lexer.g.cs in that case.
         }
     }
 
