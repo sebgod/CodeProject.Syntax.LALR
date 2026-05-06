@@ -100,11 +100,15 @@ internal static class Program
         // Schema + lexer table come from the source-generated Bnf class (built from
         // bnf.lalr.yaml at compile time). The visitor turns each production action
         // into the same MakeList / MakeQuotedString / MakeMetaTerm rewriter logic
-        // stage0 wires into Production constructors directly.
+        // stage0 wires into Production constructors directly. Phase 5 / slice 5:
+        // the parser comes pre-baked via BuildParser(visitor) — Definition +
+        // ParseTable were computed at compile time, so ParserTableBuilder is
+        // trimmable. The runtime Build(visitor) call now exists only for the
+        // lexer half of the tuple (slice 6 will pre-bake that too).
         var visitor = new BnfVisitor();
-        var (grammar, lexerTable) = Bnf.Build(visitor);
+        var parser = Bnf.BuildParser(visitor);
+        var (_, lexerTable) = Bnf.Build(visitor);
 
-        var parser = new Parser(grammar);
         var debugger = new Debug(parser, Console.Write, Console.Error.Write);
         var parseTime = System.Diagnostics.Stopwatch.StartNew();
 

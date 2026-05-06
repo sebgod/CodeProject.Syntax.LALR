@@ -74,8 +74,10 @@ internal static class Program
         };
 
         var visitor = new BoxBuildingVisitor(new BoxStyle(fontPath, fontSize));
-        var (grammar, lexerTable) = Build(visitor);
-        var parser = new Parser(grammar);
+        // Phase 5 / slice 5: pre-baked parser via BuildParser(visitor); lexer
+        // half still routes through Build (slice 6 will pre-bake that).
+        var parser = BuildParser(visitor);
+        var (_, lexerTable) = Build(visitor);
 
         var samples = parsed.Formula is not null ? [parsed.Formula] : DefaultSamples;
 
