@@ -61,6 +61,24 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <summary>
+    /// Phase 5 / compiler-compiler: an unresolved shift-reduce or reduce-reduce
+    /// conflict landed in the parse table after building it at compile time.
+    /// Equivalent to the runtime <c>GrammarConflictException</c> the parser
+    /// throws when constructed against a conflicting grammar — surfacing it
+    /// here turns "boom on first new Parser(g)" into a Roslyn build error
+    /// linked to the YAML file. Resolve by placing the offending productions
+    /// in a <c>PrecedenceGroup</c> with <c>derivation: leftmost</c> /
+    /// <c>derivation: rightmost</c>, or by restructuring the grammar.
+    /// </summary>
+    private static readonly DiagnosticDescriptor GrammarConflictDescriptor = new(
+        id: "LALR0004",
+        title: "Unresolved LALR(1) parse-table conflict",
+        messageFormat: "{0}: {1}",
+        category: "CodeProject.Syntax.LALR.SourceGenerators",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // The consumer's RootNamespace (csproj <RootNamespace>) lands as a
@@ -163,6 +181,63 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
         {
             context.AddSource(className + ".Visitor.g.cs", SourceText.From(visitorSource, Encoding.UTF8));
         }
+
+        // Phase 5 / slice 3: compiler-compiler — run SchemaCompiler +
+        // ParserTableBuilder at build time and emit the populated Grammar +
+        // ParseTable as C# literals. Only proceed if structural validation
+        // (LALR0003) passed: validation errors above mean we can't trust the
+        // schema enough to build a parse table from it.
+        if (validationErrors.Count == 0)
+        {
+            var emit = TablesEmitter.Emit(schema, rootNamespace, className);
+            if (emit.HasSchemaError)
+            {
+                // Slipped past SchemaValidator — surface as LALR0003 so the user
+                // gets a single consistent diagnostic class for schema problems.
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidSchemaDescriptor,
+                    Location.Create(path, default, default),
+                    Path.GetFileName(path),
+                    "schema",
+                    emit.SchemaError));
+            }
+            else if (emit.HasConflicts)
+            {
+                foreach (var conflict in emit.Conflicts!)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        GrammarConflictDescriptor,
+                        Location.Create(path, default, default),
+                        Path.GetFileName(path),
+                        FormatConflict(conflict, schema)));
+                }
+            }
+            else if (emit.HasSource)
+            {
+                context.AddSource(className + ".Tables.g.cs", SourceText.From(emit.Source!, Encoding.UTF8));
+            }
+        }
+    }
+
+    /// <summary>
+    /// One-line conflict description for the LALR0004 diagnostic message.
+    /// Resolves symbol ids back to schema-level names so the message reads
+    /// in the same vocabulary the YAML uses.
+    /// </summary>
+    private static string FormatConflict(GrammarConflict c, GrammarSchema schema)
+    {
+        string SymName(int id) => id < 0
+            ? "<EOF>"
+            : (schema.Symbols != null && id < schema.Symbols.Count ? schema.Symbols[id] : $"#{id}");
+        var lookahead = SymName(c.LookaheadSymbolId);
+        return c.Kind switch
+        {
+            ConflictKind.ShiftReduce =>
+                $"shift-reduce conflict at LALR(1) state {c.State} on lookahead '{lookahead}': shift to state {c.ShiftTargetState} vs. reduce productions [{string.Join(", ", c.ReduceProductionIds)}]",
+            ConflictKind.ReduceReduce =>
+                $"reduce-reduce conflict at LALR(1) state {c.State} on lookahead '{lookahead}': competing reductions [{string.Join(", ", c.ReduceProductionIds)}]",
+            _ => $"unknown conflict kind {c.Kind} at state {c.State}",
+        };
     }
 
     /// <summary>

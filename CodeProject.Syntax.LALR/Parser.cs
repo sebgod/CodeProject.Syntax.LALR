@@ -8,37 +8,63 @@ namespace CodeProject.Syntax.LALR;
 
 public class Parser
 {
+    // Null when constructed from a pre-baked ParseTable (compiler-compiler /
+    // Phase 5 path) — the introspection getters that depend on table-build
+    // state (FirstSets, LR0/LR1 items, kernels, gotos, propogations) throw
+    // NotSupportedException on this path. Productions / NonTerminals / Conflicts
+    // stay available because they're cheaply derivable from Grammar at ctor time.
     private readonly ParserTableBuilder _builder;
     private readonly Grammar _grammar;
     private readonly ParseTable _parseTable;
+    // Always populated. On the runtime-build path these mirror _builder's
+    // equivalents (passthrough); on the pre-baked path they're computed
+    // directly from Grammar in the ctor.
+    private readonly IReadOnlyList<Production> _productions;
+    private readonly HashSet<int> _nonterminals;
 
-    public IReadOnlyList<HashSet<int>> FirstSets => _builder.FirstSets;
+    private const string PreBakedIntrospectionMessage =
+        "This Parser was constructed from a pre-baked ParseTable; LR0/LR1 introspection state is unavailable. " +
+        "Use new Parser(grammar) (which runs ParserTableBuilder) if you need to inspect items, kernels, gotos, or first-sets.";
 
-    public IReadOnlyList<LR0Item> LR0Items => _builder.LR0Items;
+    public IReadOnlyList<HashSet<int>> FirstSets =>
+        _builder?.FirstSets ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<LR1Item> LR1Items => _builder.LR1Items;
+    public IReadOnlyList<LR0Item> LR0Items =>
+        _builder?.LR0Items ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<HashSet<int>> LR0States => _builder.LR0States;
+    public IReadOnlyList<LR1Item> LR1Items =>
+        _builder?.LR1Items ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<HashSet<int>> LR0Kernels => _builder.LR0Kernels;
+    public IReadOnlyList<HashSet<int>> LR0States =>
+        _builder?.LR0States ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<HashSet<int>> LALRStates => _builder.LALRStates;
+    public IReadOnlyList<HashSet<int>> LR0Kernels =>
+        _builder?.LR0Kernels ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<int[]> LRGotos => _builder.LRGotos;
+    public IReadOnlyList<HashSet<int>> LALRStates =>
+        _builder?.LALRStates ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<int[]> GotoPrecedence => _builder.GotoPrecedence;
+    public IReadOnlyList<int[]> LRGotos =>
+        _builder?.LRGotos ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<Production> Productions => _builder.Productions;
+    public IReadOnlyList<int[]> GotoPrecedence =>
+        _builder?.GotoPrecedence ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public HashSet<int> Terminals => _builder.Terminals;
+    public IReadOnlyList<Production> Productions => _productions;
 
-    public HashSet<int> NonTerminals => _builder.NonTerminals;
+    public HashSet<int> Terminals =>
+        _builder?.Terminals ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations => _builder.LALRPropogations;
+    public HashSet<int> NonTerminals => _nonterminals;
 
-    public IReadOnlyList<int> ProductionPrecedence => _builder.ProductionPrecedence;
+    public IReadOnlyList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations =>
+        _builder?.LALRPropogations ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
-    public IReadOnlyList<Derivation> ProductionDerivation => _builder.ProductionDerivation;
+    public IReadOnlyList<int> ProductionPrecedence =>
+        _builder?.ProductionPrecedence ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
+
+    public IReadOnlyList<Derivation> ProductionDerivation =>
+        _builder?.ProductionDerivation ?? throw new System.NotSupportedException(PreBakedIntrospectionMessage);
 
     public Grammar Grammar => _grammar;
 
@@ -46,11 +72,13 @@ public class Parser
 
     /// <summary>
     /// Unresolved shift-reduce / reduce-reduce conflicts found while building the parse
-    /// table. Always empty after a successful constructor call: the constructor throws
-    /// <see cref="GrammarConflictException"/> if any conflicts remain. Useful for tools
-    /// that catch the exception and want to introspect the offending cells.
+    /// table. Empty after a successful runtime-build constructor call (the constructor
+    /// throws <see cref="GrammarConflictException"/> if any conflicts remain). Always
+    /// empty on the pre-baked path — conflicts surfaced as <c>LALR0004</c> Roslyn
+    /// diagnostics at generator time, so a pre-baked Parser by construction has none.
     /// </summary>
-    public IReadOnlyList<GrammarConflict> Conflicts => _builder.Conflicts;
+    public IReadOnlyList<GrammarConflict> Conflicts =>
+        _builder?.Conflicts ?? System.Array.Empty<GrammarConflict>();
 
     /// <summary>
     /// Symbol ids that have a non-error action at <paramref name="state"/>. Column 0
@@ -190,13 +218,20 @@ public class Parser
     }
 
     /// <summary>
-    /// constructor, construct parser table
+    /// Runtime-build constructor: invokes <see cref="ParserTableBuilder"/> to
+    /// compute the parse table from the grammar. Throws <see cref="GrammarConflictException"/>
+    /// on any unresolved S/R or R/R conflict (use <see cref="Conflicts"/> on the
+    /// exception for details, or place the offending productions in a
+    /// <see cref="PrecedenceGroup"/> with <see cref="Derivation.LeftMost"/> /
+    /// <see cref="Derivation.RightMost"/>).
     /// </summary>
     public Parser(Grammar grammar)
     {
         _grammar = grammar;
         _builder = new ParserTableBuilder(grammar);
         _parseTable = _builder.ParseTable;
+        _productions = _builder.Productions;
+        _nonterminals = _builder.NonTerminals;
 
         if (_builder.Conflicts.Count > 0)
         {
@@ -205,5 +240,47 @@ public class Parser
             throw new GrammarConflictException(_builder.Conflicts,
                 GrammarConflictException.FormatMessage(_builder.Conflicts, _grammar, _builder.Productions));
         }
+    }
+
+    /// <summary>
+    /// Pre-baked constructor (Phase 5 / compiler-compiler path). Skips
+    /// <see cref="ParserTableBuilder"/> entirely — the source generator already
+    /// ran the algorithm at build time and emitted the populated
+    /// <paramref name="parseTable"/> as a C# literal. Productions and
+    /// NonTerminals are derived directly from <paramref name="grammar"/>;
+    /// LR0/LR1 introspection state isn't available on this path (see the
+    /// individual property docs).
+    ///
+    /// On this path the trimmer can drop <see cref="ParserTableBuilder"/> and
+    /// its dependencies from the consumer's AOT image — the Parser only needs
+    /// the parse loop in <see cref="ParseInputAsync"/>.
+    /// </summary>
+    public Parser(Grammar grammar, ParseTable parseTable)
+    {
+        _grammar = grammar;
+        _parseTable = parseTable;
+        _builder = null;
+
+        // Productions: flatten precedence groups in declaration order, matching
+        // the order ParserTableBuilder.PopulateProductions uses (so production
+        // indices in the pre-baked table line up).
+        var productions = new List<Production>();
+        foreach (var group in grammar.PrecedenceGroups)
+        {
+            foreach (var prod in group.Productions)
+            {
+                productions.Add(prod);
+            }
+        }
+        _productions = productions;
+
+        // Non-terminals: any symbol that appears as the left-hand side of a
+        // production. Same definition ParserTableBuilder.InitSymbols uses.
+        var nonterminals = new HashSet<int>();
+        foreach (var prod in productions)
+        {
+            nonterminals.Add(prod.Left);
+        }
+        _nonterminals = nonterminals;
     }
 }
