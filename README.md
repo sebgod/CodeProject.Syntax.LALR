@@ -464,7 +464,7 @@ commit, tag `vX.Y.Z` matching the version, push the tag.
 
 The project is usable as-is and on NuGet. Items still on the list, ranked:
 
-- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Slices 1–4
+- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Slices 1–5
   landed: the generator runs `ParserTableBuilder` at build time and emits a
   populated `Grammar` + `ParseTable` literal into `<Name>.Tables.g.cs`
   alongside the schema, so consumers can call `MyGrammar.BuildParser()` and
@@ -474,13 +474,17 @@ The project is usable as-is and on NuGet. Items still on the list, ranked:
   `<Name>.Visitor.g.cs` alongside the visitor surface) walks the pre-baked
   `Definition` and splices the visitor's rewriters into the productions that
   declared an `action:`, reusing the same pre-baked `ParseTable` — same trim
-  win, full visitor wiring. Unresolved S/R + R/R conflicts surface as
-  `LALR0004` Roslyn diagnostics at build time (with YAML locator) instead of
-  `GrammarConflictException` at first `new Parser(grammar)`. Both modes
-  coexist — runtime-build via `new Parser(grammar)` still works (used by
-  `lalr-tui` which loads arbitrary YAML at runtime). Outstanding: slice 5
-  (migrate the example consumers from `SchemaCompiler.Compile` to the
-  pre-baked path).
+  win, full visitor wiring. All in-tree consumers (`Bootstrap.Stage1`,
+  `Examples.Calculator` / `.Json` / `.Latex` / `.LatexConsole`) now route
+  through `BuildParser(visitor)`; the lexer half still goes through
+  `Build(visitor)` until slice 6 pre-bakes that too. Unresolved S/R + R/R
+  conflicts surface as `LALR0004` Roslyn diagnostics at build time (with
+  YAML locator) instead of `GrammarConflictException` at first
+  `new Parser(grammar)`. Both modes coexist — runtime-build via
+  `new Parser(grammar)` still works (used by `lalr-tui` which loads
+  arbitrary YAML at runtime). Outstanding: optional slice 6 (pre-bake the
+  lexer too — link `IRxParser` + the `IRx` AST into the netstandard2.0
+  generator and emit `LexRule[]` literals).
 - **Generator-time regex validation.** Slice 1 of generator-time validation
   (`LALR0003` — structural errors via `SchemaValidator`) shipped in 2.1.0.
   Linking `IRxParser` into the generator would surface bad `match:` regexes
