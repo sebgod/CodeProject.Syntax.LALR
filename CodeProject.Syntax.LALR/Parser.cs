@@ -12,33 +12,33 @@ public class Parser
     private readonly Grammar _grammar;
     private readonly ParseTable _parseTable;
 
-    public HashSet<int>[] FirstSets => _builder.FirstSets;
+    public IReadOnlyList<HashSet<int>> FirstSets => _builder.FirstSets;
 
-    public IList<LR0Item> LR0Items => _builder.LR0Items;
+    public IReadOnlyList<LR0Item> LR0Items => _builder.LR0Items;
 
-    public IList<LR1Item> LR1Items => _builder.LR1Items;
+    public IReadOnlyList<LR1Item> LR1Items => _builder.LR1Items;
 
-    public ICollection<HashSet<int>> LR0States => _builder.LR0States;
+    public IReadOnlyList<HashSet<int>> LR0States => _builder.LR0States;
 
-    public ICollection<HashSet<int>> LR0Kernels => _builder.LR0Kernels;
+    public IReadOnlyList<HashSet<int>> LR0Kernels => _builder.LR0Kernels;
 
-    public ICollection<HashSet<int>> LALRStates => _builder.LALRStates;
+    public IReadOnlyList<HashSet<int>> LALRStates => _builder.LALRStates;
 
-    public ICollection<int[]> LRGotos => _builder.LRGotos;
+    public IReadOnlyList<int[]> LRGotos => _builder.LRGotos;
 
-    public ICollection<int[]> GotoPrecedence => _builder.GotoPrecedence;
+    public IReadOnlyList<int[]> GotoPrecedence => _builder.GotoPrecedence;
 
-    public IList<Production> Productions => _builder.Productions;
+    public IReadOnlyList<Production> Productions => _builder.Productions;
 
-    public ISet<int> Terminals => _builder.Terminals;
+    public HashSet<int> Terminals => _builder.Terminals;
 
-    public ISet<int> NonTerminals => _builder.NonTerminals;
+    public HashSet<int> NonTerminals => _builder.NonTerminals;
 
-    public IList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations => _builder.LALRPropogations;
+    public IReadOnlyList<IDictionary<int, IList<LALRPropogation>>> LALRPropogations => _builder.LALRPropogations;
 
-    public ICollection<int> ProductionPrecedence => _builder.ProductionPrecedence;
+    public IReadOnlyList<int> ProductionPrecedence => _builder.ProductionPrecedence;
 
-    public ICollection<Derivation> ProductionDerivation => _builder.ProductionDerivation;
+    public IReadOnlyList<Derivation> ProductionDerivation => _builder.ProductionDerivation;
 
     public Grammar Grammar => _grammar;
 
@@ -202,12 +202,8 @@ public class Parser
         {
             // Surface unresolved S/R and R/R conflicts immediately rather than waiting for
             // an input to drive the parser through the offending parse-table cell.
-            // Productions is exposed as IList<Production> (mutator surface preserved
-            // for back-compat); FormatMessage wants IReadOnlyList. The underlying
-            // backing store is a List<Production>, so the cast is safe.
             throw new GrammarConflictException(_builder.Conflicts,
-                GrammarConflictException.FormatMessage(_builder.Conflicts, _grammar,
-                    (IReadOnlyList<Production>)_builder.Productions));
+                GrammarConflictException.FormatMessage(_builder.Conflicts, _grammar, _builder.Productions));
         }
     }
 }
