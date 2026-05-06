@@ -29,6 +29,7 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
     private readonly CancellationToken _cancellationToken;
     private readonly LexerErrorMode _errorMode;
     private readonly int _errorSymbolId;
+    private readonly ColumnMode _columnMode;
     private bool _readerCompleted;
     private Item _currentItem;
 
@@ -47,6 +48,7 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
     public PipeBytesLexer(PipeReader reader, IReadOnlyDictionary<string, LexRule[]> patternTable,
         LexerErrorMode errorMode = LexerErrorMode.Throw,
         int errorSymbolId = -1,
+        ColumnMode columnMode = ColumnMode.Codepoints,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reader);
@@ -66,6 +68,7 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
         _cancellationToken = cancellationToken;
         _errorMode = errorMode;
         _errorSymbolId = errorSymbolId;
+        _columnMode = columnMode;
         _states = new Stack<string>([RootState]);
         _compiledStates = new Dictionary<string, CompiledState>(patternTable.Count, StringComparer.Ordinal);
         foreach (var kv in patternTable)
@@ -90,20 +93,24 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
 
     /// <summary>Convenience factory that wraps a UTF-8 byte buffer.</summary>
     public static PipeBytesLexer FromBytes(ReadOnlyMemory<byte> utf8Bytes, IReadOnlyDictionary<string, LexRule[]> patternTable,
-        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1, CancellationToken cancellationToken = default)
+        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1,
+        ColumnMode columnMode = ColumnMode.Codepoints,
+        CancellationToken cancellationToken = default)
     {
         var reader = PipeReader.Create(new ReadOnlySequence<byte>(utf8Bytes));
-        return new PipeBytesLexer(reader, patternTable, errorMode, errorSymbolId, cancellationToken);
+        return new PipeBytesLexer(reader, patternTable, errorMode, errorSymbolId, columnMode, cancellationToken);
     }
 
     /// <summary>Convenience factory that wraps a UTF-8 stream via Pipelines.</summary>
     public static PipeBytesLexer FromStream(Stream stream, IReadOnlyDictionary<string, LexRule[]> patternTable,
         bool leaveOpen = false,
-        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1, CancellationToken cancellationToken = default)
+        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1,
+        ColumnMode columnMode = ColumnMode.Codepoints,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
         var reader = PipeReader.Create(stream, new StreamPipeReaderOptions(leaveOpen: leaveOpen));
-        return new PipeBytesLexer(reader, patternTable, errorMode, errorSymbolId, cancellationToken);
+        return new PipeBytesLexer(reader, patternTable, errorMode, errorSymbolId, columnMode, cancellationToken);
     }
 
     /// <summary>
@@ -111,10 +118,12 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
     /// <see cref="FromBytes"/> or <see cref="FromStream"/> when the source is already bytes.
     /// </summary>
     public static PipeBytesLexer FromString(string text, IReadOnlyDictionary<string, LexRule[]> patternTable,
-        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1, CancellationToken cancellationToken = default)
+        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1,
+        ColumnMode columnMode = ColumnMode.Codepoints,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return FromBytes(Encoding.UTF8.GetBytes(text), patternTable, errorMode, errorSymbolId, cancellationToken);
+        return FromBytes(Encoding.UTF8.GetBytes(text), patternTable, errorMode, errorSymbolId, columnMode, cancellationToken);
     }
 
     public Task<Item> CurrentAsync()
@@ -256,10 +265,15 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
 
     private void AdvanceCursor(ReadOnlySequence<byte> matched)
     {
-        // Walk the matched bytes once to update line/column/offset. ASCII-only inputs
-        // hit the fast path (one branch per byte). Multi-byte UTF-8 sequences advance
-        // the column by their byte count — we deliberately don't decode here, since
-        // the documented contract is byte-based columns.
+        // Walk the matched bytes once to update line/column/offset.
+        // - ByteOffset always counts every byte (the field is documented as a byte index).
+        // - Line bumps on every '\n' regardless of column mode.
+        // - Column behaviour depends on _columnMode:
+        //     Codepoints (default): skip UTF-8 continuation bytes (0b10xxxxxx) so each
+        //       codepoint contributes exactly 1. ASCII = same as Bytes mode.
+        //     Bytes: every byte contributes 1.
+        // No decoding either way — both modes are O(1) per byte.
+        var codepointMode = _columnMode == ColumnMode.Codepoints;
         foreach (var segment in matched)
         {
             var span = segment.Span;
@@ -272,8 +286,9 @@ public sealed class PipeBytesLexer : IAsyncIterator<Item>
                     _line++;
                     _column = 1;
                 }
-                else
+                else if (!codepointMode || (b & 0xC0) != 0x80)
                 {
+                    // Codepoint mode skips continuation bytes; Bytes mode counts every byte.
                     _column++;
                 }
             }

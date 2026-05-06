@@ -36,6 +36,7 @@ internal static class CodeEmitter
         EmitProductions(sb, schema.Productions);
         EmitLexer(sb, schema.Lexer);
         EmitActions(sb, schema.Actions);
+        EmitColumns(sb, schema.Columns);
 
         sb.AppendLine("    };");
 
@@ -223,6 +224,22 @@ internal static class CodeEmitter
         sb.AppendLine("        {");
         sb.Append("            ClassName = ").Append(StringLit(actions.ClassName)).AppendLine(",");
         sb.AppendLine("        },");
+    }
+
+    /// <summary>
+    /// Emit the schema's <c>Columns</c> setting verbatim — only when the YAML
+    /// explicitly specified it. The runtime <see cref="GrammarSchema.Columns"/>
+    /// is nullable; absence means "consumer decides", and the lexer ctor's
+    /// own default (<c>Codepoints</c>) takes over.
+    /// </summary>
+    private static void EmitColumns(StringBuilder sb, CodeProject.Syntax.LALR.LexicalGrammar.ColumnMode? columns)
+    {
+        if (columns == null)
+        {
+            return;
+        }
+        sb.Append("        Columns = global::CodeProject.Syntax.LALR.LexicalGrammar.ColumnMode.")
+          .Append(columns.Value).AppendLine(",");
     }
 
     /// <summary>

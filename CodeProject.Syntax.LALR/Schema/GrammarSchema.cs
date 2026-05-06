@@ -5,6 +5,7 @@
 #nullable disable
 
 using System.Collections.Generic;
+using CodeProject.Syntax.LALR.LexicalGrammar;
 
 namespace CodeProject.Syntax.LALR.Schema;
 
@@ -48,6 +49,15 @@ public sealed class GrammarSchema
     /// <see cref="SchemaCompiler"/> ignores this.
     /// </summary>
     public ActionsSchema Actions { get; set; }
+
+    /// <summary>
+    /// How the lexer reports <see cref="SourcePosition.Column"/>. Optional;
+    /// when omitted, defaults to <see cref="ColumnMode.Codepoints"/> (one
+    /// codepoint contributes 1 to the column — diagnostic-friendly for
+    /// non-ASCII input). Set <see cref="ColumnMode.Bytes"/> to count UTF-8
+    /// bytes instead.
+    /// </summary>
+    public ColumnMode? Columns { get; set; }
 }
 
 public sealed class ProductionGroupSchema

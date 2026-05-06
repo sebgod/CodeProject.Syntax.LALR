@@ -739,6 +739,51 @@ public class GrammarSourceGeneratorTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // ColumnMode: schema-level `columns:` flag, default Codepoints
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void NoColumnsFlag_LexerEmitsCodepointDefault()
+    {
+        // Absence of `columns:` in the YAML means LexerColumnMode resolves to
+        // Codepoints — diagnostic-friendly default for non-ASCII grammars.
+        var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        var lexerSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("BuildLexer()", StringComparison.Ordinal));
+        Assert.Contains("LexerColumnMode = global::CodeProject.Syntax.LALR.LexicalGrammar.ColumnMode.Codepoints", lexerSource);
+    }
+
+    [Fact]
+    public void ColumnsBytes_LexerEmitsBytesConstant()
+    {
+        // `columns: bytes` in YAML threads through to the LexerColumnMode constant.
+        const string yaml = """
+            columns: bytes
+            symbols: ["S'", E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,    rhs: [n] }
+            lexer:
+              root:
+                - { symbol: n, match: "[0-9]+" }
+            """;
+
+        var (trees, diags) = RunGenerator(yaml, "byte-cols.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        var lexerSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("BuildLexer()", StringComparison.Ordinal));
+        Assert.Contains("LexerColumnMode = global::CodeProject.Syntax.LALR.LexicalGrammar.ColumnMode.Bytes", lexerSource);
+
+        // The schema file also surfaces it so runtime callers can read it.
+        var schemaSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("public static GrammarSchema Schema", StringComparison.Ordinal));
+        Assert.Contains("Columns = global::CodeProject.Syntax.LALR.LexicalGrammar.ColumnMode.Bytes", schemaSource);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Phase 5 / slice 4: visitor-aware pre-baked BuildParser<T>(IVisitor<T>)
     // ──────────────────────────────────────────────────────────────────────────
 
