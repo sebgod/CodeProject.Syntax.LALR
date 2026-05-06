@@ -464,17 +464,19 @@ commit, tag `vX.Y.Z` matching the version, push the tag.
 
 The project is usable as-is and on NuGet. Items still on the list, ranked:
 
-- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Today the
-  generator emits a `GrammarSchema` POCO; consumers call
-  `SchemaCompiler.Compile(schema, …)` at runtime to build the LALR(1) parse
-  table. Phase 5 runs the schema compiler + `ParserTableBuilder` *at build
-  time* and emits the populated `Grammar` + `ParseTable.Actions[,]` directly,
-  trimming table-build code out of consumer AOT images and surfacing S/R + R/R
-  conflicts as `LALR0004` Roslyn diagnostics with YAML locators (instead of
-  runtime `GrammarConflictException`). Slice 1 (extract `ParserTableBuilder`
-  from `Parser.cs` so the algorithm becomes pure C# and linkable into the
-  netstandard2.0 generator) has landed; slices 2–5 (link, emit, diagnose,
-  migrate consumers) are in progress.
+- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Slices 1–3
+  landed: the generator now runs `ParserTableBuilder` at build time and emits
+  a populated `Grammar` + `ParseTable` literal into `<Name>.Tables.g.cs`
+  alongside the schema, so consumers can call `MyGrammar.BuildParser()` and
+  get a `Parser` with no table-build code reachable — the trimmer can drop
+  `ParserTableBuilder` and its LR0/LR1 helpers from the AOT image. Unresolved
+  S/R + R/R conflicts surface as `LALR0004` Roslyn diagnostics at build time
+  (with YAML locator) instead of `GrammarConflictException` at first
+  `new Parser(grammar)`. Both modes coexist — runtime-build via
+  `new Parser(grammar)` still works (used by `lalr-tui` which loads arbitrary
+  YAML at runtime). Outstanding: slice 4 (visitor-aware `BuildParser<T>(IVisitor<T>)`
+  that wires rewriters into the pre-baked grammar) and slice 5 (migrate the
+  example consumers from `SchemaCompiler.Compile` to the pre-baked path).
 - **Generator-time regex validation.** Slice 1 of generator-time validation
   (`LALR0003` — structural errors via `SchemaValidator`) shipped in 2.1.0.
   Linking `IRxParser` into the generator would surface bad `match:` regexes
