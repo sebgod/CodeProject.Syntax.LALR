@@ -218,6 +218,102 @@ public class Parser
     }
 
     /// <summary>
+    /// Sync mirror of <see cref="ParseInputAsync"/>. Same parse loop, same
+    /// behaviour, no async machinery. Use this when the input is already in
+    /// memory (e.g. <see cref="LexicalGrammar.BytesLexer"/> wrapped in a
+    /// <see cref="LexicalGrammar.SyncLATokenIterator"/>) — it skips the
+    /// per-token <c>Task</c> allocations and state-machine restores the async
+    /// path pays even when the underlying lexer never blocks.
+    /// </summary>
+    /// <remarks>
+    /// Code-duplicates the async loop on purpose: extracting a shared body
+    /// would force <see cref="System.Threading.Tasks.ValueTask{TResult}"/>
+    /// boxing or generic gymnastics that erodes the savings we're after.
+    /// The two methods must stay in lockstep — the test suite covers parity
+    /// against the async implementation on the same inputs.
+    /// </remarks>
+    public Item ParseInput(ISyncLAIterator<Item> tokenIterator, Debug debugger = null,
+        bool trimReductions = true,
+        bool allowRewriting = true,
+        ParserErrorMode errorMode = ParserErrorMode.Throw,
+        CancellationToken cancellationToken = default)
+    {
+        const int initState = 0;
+        var tokenStack = new Stack<Item>();
+        var state = initState;
+        var productions = Productions;
+        var nonterminals = NonTerminals;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var token = tokenIterator.LookAhead();
+            var action = _parseTable.Actions[state, token.ID + 1];
+            debugger?.DumpParsingState(state, tokenStack, token, action);
+
+            switch (action.ActionType)
+            {
+                case ActionType.Shift:
+                    state = action.ActionParameter;
+                    token.State = state;
+                    tokenStack.Push(token);
+                    tokenIterator.MoveNext();
+                    break;
+
+                case ActionType.Reduce:
+                    var nProduction = action.ActionParameter;
+                    var production = productions[nProduction];
+                    var nChildren = production.Right.Length;
+                    Item reduction;
+                    if (trimReductions && nChildren == 1 && nonterminals.Contains(production.Right[0]))
+                    {
+                        var popped = tokenStack.Pop();
+                        reduction = new Item(production.Left, popped.Content, popped.Position);
+                    }
+                    else
+                    {
+                        var children = new Item[nChildren];
+                        for (var i = 0; i < nChildren; i++)
+                        {
+                            children[nChildren - i - 1] = tokenStack.Pop();
+                        }
+                        object rewrite = allowRewriting && production.HasRewriter
+                            ? production.Rewrite(children)
+                            : new Reduction(nProduction, children);
+                        var pos = nChildren > 0 ? children[0].Position : token.Position;
+                        reduction = new Item(production.Left, rewrite, pos);
+                    }
+                    var lastState = tokenStack.Count > 0 ? tokenStack.Peek().State : initState;
+                    state = _parseTable.Actions[lastState, production.Left + 1].ActionParameter;
+                    reduction.State = state;
+                    tokenStack.Push(reduction);
+                    if (tokenStack.Count == 1 && tokenStack.Peek().ID == 0)
+                    {
+                        return tokenStack.Pop();
+                    }
+                    break;
+
+                case ActionType.Error:
+                    token.State = -(state + 1);
+                    if (errorMode == ParserErrorMode.Throw)
+                    {
+                        var expected = ExpectedTerminalsAt(state);
+                        throw new ParseErrorException(token, state, expected,
+                            ParseErrorException.FormatMessage(token, state, expected, _grammar));
+                    }
+                    return token;
+
+                case ActionType.ErrorRR:
+                    throw new InvalidOperationException("Reduce-Reduce conflict in grammar: " + token);
+
+                case ActionType.ErrorSR:
+                    throw new InvalidOperationException("Shift-Reduce conflict in grammar: " + token);
+            }
+            debugger?.Flush();
+        }
+    }
+
+    /// <summary>
     /// Runtime-build constructor: invokes <see cref="ParserTableBuilder"/> to
     /// compute the parse table from the grammar. Throws <see cref="GrammarConflictException"/>
     /// on any unresolved S/R or R/R conflict (use <see cref="Conflicts"/> on the
