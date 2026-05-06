@@ -464,19 +464,23 @@ commit, tag `vX.Y.Z` matching the version, push the tag.
 
 The project is usable as-is and on NuGet. Items still on the list, ranked:
 
-- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Slices 1–3
-  landed: the generator now runs `ParserTableBuilder` at build time and emits
-  a populated `Grammar` + `ParseTable` literal into `<Name>.Tables.g.cs`
+- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Slices 1–4
+  landed: the generator runs `ParserTableBuilder` at build time and emits a
+  populated `Grammar` + `ParseTable` literal into `<Name>.Tables.g.cs`
   alongside the schema, so consumers can call `MyGrammar.BuildParser()` and
   get a `Parser` with no table-build code reachable — the trimmer can drop
-  `ParserTableBuilder` and its LR0/LR1 helpers from the AOT image. Unresolved
-  S/R + R/R conflicts surface as `LALR0004` Roslyn diagnostics at build time
-  (with YAML locator) instead of `GrammarConflictException` at first
-  `new Parser(grammar)`. Both modes coexist — runtime-build via
-  `new Parser(grammar)` still works (used by `lalr-tui` which loads arbitrary
-  YAML at runtime). Outstanding: slice 4 (visitor-aware `BuildParser<T>(IVisitor<T>)`
-  that wires rewriters into the pre-baked grammar) and slice 5 (migrate the
-  example consumers from `SchemaCompiler.Compile` to the pre-baked path).
+  `ParserTableBuilder` and its LR0/LR1 helpers from the AOT image. The
+  visitor-aware overload `MyGrammar.BuildParser<T>(IVisitor<T>)` (emitted in
+  `<Name>.Visitor.g.cs` alongside the visitor surface) walks the pre-baked
+  `Definition` and splices the visitor's rewriters into the productions that
+  declared an `action:`, reusing the same pre-baked `ParseTable` — same trim
+  win, full visitor wiring. Unresolved S/R + R/R conflicts surface as
+  `LALR0004` Roslyn diagnostics at build time (with YAML locator) instead of
+  `GrammarConflictException` at first `new Parser(grammar)`. Both modes
+  coexist — runtime-build via `new Parser(grammar)` still works (used by
+  `lalr-tui` which loads arbitrary YAML at runtime). Outstanding: slice 5
+  (migrate the example consumers from `SchemaCompiler.Compile` to the
+  pre-baked path).
 - **Generator-time regex validation.** Slice 1 of generator-time validation
   (`LALR0003` — structural errors via `SchemaValidator`) shipped in 2.1.0.
   Linking `IRxParser` into the generator would surface bad `match:` regexes
