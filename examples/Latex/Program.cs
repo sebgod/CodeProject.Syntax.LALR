@@ -38,20 +38,21 @@ internal static class Program
         "\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}",
     ];
 
-    public static async Task Main()
+    public static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
 
         var renderer = new Renderer();
-        // Phase 5 / slices 5 + 6: parser + lexer both pre-baked via the
-        // generator. SchemaCompiler is unreachable in the AOT trim graph.
+        // Phase 5 / slices 5 + 6 + sync surface: parser + lexer pre-baked, run
+        // through BytesLexer + Parser.ParseInput. SchemaCompiler + the async
+        // iterator path are unreachable in this AOT image.
         var parser = BuildParser(renderer);
         var lexerTable = BuildLexer();
 
         foreach (var src in Samples)
         {
-            using var lexer = PipeBytesLexer.FromString(src, lexerTable);
-            using var tokens = new AsyncLATokenIterator(lexer);
+            using var lexer = BytesLexer.FromString(src, lexerTable);
+            using var tokens = new SyncLATokenIterator(lexer);
 
             // trimReductions:true folds the passthrough productions
             // (E->T, T->F, F->F2, F2->P, P->A, S->E) so the visitor only fires
@@ -63,7 +64,7 @@ internal static class Program
             string rendered;
             try
             {
-                var result = await parser.ParseInputAsync(tokens, debugger: null);
+                var result = parser.ParseInput(tokens, debugger: null);
                 rendered = result.IsError ? $"<error: {result}>" : (string)result.Content;
             }
             catch (ParseErrorException ex)

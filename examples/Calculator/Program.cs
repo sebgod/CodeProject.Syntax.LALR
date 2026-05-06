@@ -1,9 +1,7 @@
 using System;
 using System.Globalization;
-using System.Threading.Tasks;
 using CodeProject.Syntax.LALR;
 using CodeProject.Syntax.LALR.LexicalGrammar;
-using CodeProject.Syntax.LALR.Schema;
 
 namespace Examples.Calculator;
 
@@ -17,20 +15,22 @@ namespace Examples.Calculator;
 /// </summary>
 internal static class Program
 {
-    public static async Task<int> Main()
+    public static int Main()
     {
-        // Phase 5 / slices 5 + 6: the generator pre-bakes both halves at compile
-        // time. BuildParser(visitor) skips ParserTableBuilder; BuildLexer() skips
-        // IRxParser + the runtime DFA compilation. Together they make
-        // SchemaCompiler entirely unreachable from this consumer's AOT graph.
+        // Phase 5 / slices 5 + 6 + sync surface: the generator pre-bakes both
+        // parser halves at compile time, and BytesLexer + Parser.ParseInput run
+        // the in-memory input through a fully sync pipeline (no Task allocations
+        // / no async state-machine restores per token). SchemaCompiler,
+        // ParserTableBuilder, IRxParser, and the async iterator path are all
+        // unreachable in this consumer's AOT graph.
         var calc = new Calc();
         var parser = Grammar.BuildParser(calc);
         var lexerTable = Grammar.BuildLexer();
         const string Input = "1 + 2 + 3 + 4 - 5";
-        using var lexer = PipeBytesLexer.FromString(Input, lexerTable);
-        using var tokens = new AsyncLATokenIterator(lexer);
+        using var lexer = BytesLexer.FromString(Input, lexerTable);
+        using var tokens = new SyncLATokenIterator(lexer);
 
-        var result = await parser.ParseInputAsync(tokens);
+        var result = parser.ParseInput(tokens);
         if (result.IsError)
         {
             Console.Error.WriteLine($"parse failed: {result}");

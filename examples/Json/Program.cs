@@ -33,31 +33,28 @@ internal static class Program
         }
         """;
 
-    public static async Task Main()
+    public static void Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
 
         var visitor = new JsonVisitor();
-        // Phase 5 / slices 5 + 6: parser pre-baked via BuildParser(visitor);
-        // lexer pre-baked via BuildLexer(). ParserTableBuilder + IRxParser are
-        // both unreachable in this AOT image now.
+        // Phase 5 / slices 5 + 6 + sync surface: parser + lexer pre-baked at
+        // compile time, run through the sync BytesLexer / Parser.ParseInput
+        // path. SchemaCompiler + ParserTableBuilder + IRxParser + the async
+        // iterator state machines are all unreachable in this AOT image.
         var parser = Json.BuildParser(visitor);
         var lexerTable = Json.BuildLexer();
 
-        using var lexer = PipeBytesLexer.FromString(Sample, lexerTable);
-        using var tokens = new AsyncLATokenIterator(lexer);
+        using var lexer = BytesLexer.FromString(Sample, lexerTable);
+        using var tokens = new SyncLATokenIterator(lexer);
 
-        // Debug must be non-null even when we want silence — pass null writer
-        // delegates and the trace methods become no-ops. (The parser dereferences
-        // debugger directly on every loop iteration; fixing that is a runtime-
-        // library tweak we'd do separately.)
         // trimReductions:false so every reduction fires its visitor — otherwise
         // arity-1 single-non-terminal productions (E -> V, M -> P, V -> O, V -> A)
         // get folded by the parser before the rewriter runs and the visitor's
         // ElementsOne / MembersOne / ValueObject / ValueArray methods would never
         // be called. With trim off, every cons case can rely on its tail already
         // being a List rather than handling scalar-vs-list ambiguity per-call.
-        var result = await parser.ParseInputAsync(tokens, debugger: null, trimReductions: false);
+        var result = parser.ParseInput(tokens, debugger: null, trimReductions: false);
         if (result.IsError)
         {
             Console.Error.WriteLine($"parse failed: {result}");
