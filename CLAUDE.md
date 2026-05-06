@@ -14,7 +14,7 @@ The repo was modernized to **.NET 10 / C# 14 / AOT** in 2026; older articles des
 # Build the whole solution (runtime + generator + Bootstrap{,.Stage1} + TestProject + Tui + every example)
 dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
 
-# Run all unit tests (xUnit v3 on Microsoft.Testing.Platform — 304 cases)
+# Run all unit tests (xUnit v3 on Microsoft.Testing.Platform — 326 cases)
 dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
 
 # Run the test project directly (also via MTP — equivalent, faster startup)
@@ -59,7 +59,7 @@ The demo binaries print step-by-step parse traces in Debug; in Release the `[Con
 | `examples/Latex.Grammar/` | Library | Shared LaTeX-math grammar: runs the source generator once on `latex.lalr.yaml` and exposes the resulting `Latex` partial class (Schema, AST records, `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this library — one grammar, multiple visitors. |
 | `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math via the shared `Latex.Grammar` library. Visitor renders to Unicode plain text. |
 | `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. Pulls `Console.Lib` (terminal adapters) + `DIR.Lib` (RGBA renderer + font rasterizer + math-layout primitives) from NuGet. |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform runner; `OutputType=Exe`) | 304 tests covering regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, source generator (incl. end-to-end "emit → compile → load → parse"), and parser-semantics regressions. |
+| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform runner; `OutputType=Exe`) | 326 tests covering regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, source generator (incl. end-to-end "emit → compile → load → parse"), and parser-semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic build, etc.) live in `Directory.Build.props`. Don't put them in individual csprojs. NuGet metadata, symbol packages, SourceLink, and the bundled-analyzer pack target live on `CodeProject.Syntax.LALR.csproj` (the only `IsPackable=true` project).
 
@@ -126,7 +126,7 @@ The Wikipedia-style LaTeX example (`examples/Latex/`) is the current poster chil
 ## Known tech debt
 
 - **Productions still embed semantic actions.** `Production` carries a `Func<int, Item[], object>` rewriter, so grammar definitions and code are entangled. Future direction is a typed AST + visitor split with grammar definitions in YAML; don't double down on the rewriter pattern in new grammars.
-- **Async-per-token overhead.** `PipeBytesLexer` already keeps the inner DFA loop sync (it iterates `ReadOnlySequence<byte>` segments without awaiting per byte), so async only happens at `PipeReader.ReadAsync` boundaries — that's the right shape. The remaining async-per-token cost lives in `IAsyncIterator<Item>` callers and the parser loop's `ParseInputAsync`. A pure-sync lexer/parser with async only at the I/O edge is still possible but no longer urgent.
+- **Two parse paths to keep in lockstep.** `Parser.ParseInputAsync` and `Parser.ParseInput` are intentionally code-duplicated — extracting a shared body would force `ValueTask` boxing or generic gymnastics that erodes the savings. `BytesLexer` likewise duplicates `PipeBytesLexer`'s DFA-per-state compilation block (~25 lines). `SyncAsyncParityTests` keeps the two parse loops in lockstep on the same inputs; if you change one, change the other and re-run that test class. The in-tree consumers route through the sync path now; `Bootstrap` (stage 0) deliberately stays async so the stage-parity diff doubles as a sync ↔ async equivalence test.
 
 ## Environment
 

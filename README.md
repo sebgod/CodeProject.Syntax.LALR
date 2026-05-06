@@ -12,7 +12,7 @@ that a Roslyn source generator turns into a typed schema, AST records, and a
 visitor surface at build time.
 
 > **Status (May 2026):** .NET 10, C# 14, Native AOT-clean, xUnit v3 test suite
-> (304 tests). Library code is allocation-light, reflection-free, and trim-/AOT-
+> (326 tests). Library code is allocation-light, reflection-free, and trim-/AOT-
 > compatible. Single NuGet package ships the runtime *and* the source generator.
 
 ---
@@ -139,7 +139,7 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `examples/Latex.Grammar/` | Library | Shared LaTeX grammar partial class. Source generator runs once on `latex.lalr.yaml` and emits the `Latex` partial (Schema + AST records + `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this — one grammar, multiple visitors. |
 | `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math formulas via the shared `Latex.Grammar`. Visitor renders to Unicode plain text. |
 | `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. NuGet deps: `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer + font rasteriser + math-layout primitives). |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 304 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
+| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 326 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic
 build, etc.) live in `Directory.Build.props`. NuGet metadata, symbol packages,
@@ -415,7 +415,7 @@ run, two completely different output channels.
 # Build the whole solution
 dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
 
-# Run all tests (xUnit v3 on Microsoft.Testing.Platform — 304 tests)
+# Run all tests (xUnit v3 on Microsoft.Testing.Platform — 326 tests)
 dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
 
 # Run a subset of tests (MTP --filter-method, glob-syntax)
@@ -481,11 +481,18 @@ The project is usable as-is and on NuGet. Items still on the list, ranked:
   Both modes still coexist — runtime-build via `new Parser(grammar)` +
   `SchemaCompiler.Compile` still works and is used by `lalr-tui`, which
   loads arbitrary user-supplied YAML at runtime.
-- **Generator-time regex validation.** Slice 1 of generator-time validation
-  (`LALR0003` — structural errors via `SchemaValidator`) shipped in 2.1.0.
-  Linking `IRxParser` into the generator would surface bad `match:` regexes
-  at build time too. Naturally pairs with Phase 5 / slice 2 (same linking
-  work).
+- **Sync parser/lexer surface [done].** Pure-sync alternative to the async
+  pipeline, for callers whose input is already in memory (string or
+  `ReadOnlyMemory<byte>`). `ISyncIterator<T>` / `ISyncLAIterator<T>` mirror
+  the async interfaces; `BytesLexer` walks bytes through the same byte DFA
+  as `PipeBytesLexer` but without the `PipeReader` + `Task` machinery;
+  `Parser.ParseInput` is a no-await mirror of `ParseInputAsync`. All in-tree
+  in-memory consumers (`Bootstrap.Stage1`, `TestProject`, `Examples.Calculator`
+  / `.Json` / `.Latex` / `.LatexConsole`) route through the sync path now;
+  `Bootstrap` (stage 0) deliberately stays on the async path so the stage-
+  parity diff doubles as a sync ↔ async equivalence check. The async
+  surface stays available — it's the right shape for stdin / network / on-
+  disk streaming inputs that genuinely need `await PipeReader.ReadAsync`.
 - **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based
   (documented). An optional codepoint-column decoder is available via
   `SourcePosition.GetCodepointColumn(ReadOnlySpan<byte> source)` for
@@ -496,11 +503,6 @@ The project is usable as-is and on NuGet. Items still on the list, ranked:
 - **No alternation inside a single `IRx` pattern.** Use multiple `LexRule`s in
   the same state to express alternatives. (Adding `|` to the AST is small;
   hasn't been needed yet.)
-- **Async-per-token at the parser/iterator boundary.** The lexer's inner loop
-  is sync and the only `await` per byte-buffer is `PipeReader.ReadAsync`. The
-  remaining async-per-token cost lives in `IAsyncIterator<Item>` callers and
-  the parser loop. A pure-sync, `ref struct`-style parser is possible; not a
-  priority.
 
 ---
 
