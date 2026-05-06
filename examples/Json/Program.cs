@@ -38,12 +38,11 @@ internal static class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var visitor = new JsonVisitor();
-        // Phase 5 / slice 5: use the pre-baked BuildParser(visitor) so
-        // ParserTableBuilder is trimmable from this AOT image. The runtime
-        // Build(visitor) call still produces the lexer half (slice 6 will
-        // pre-bake that too).
+        // Phase 5 / slices 5 + 6: parser pre-baked via BuildParser(visitor);
+        // lexer pre-baked via BuildLexer(). ParserTableBuilder + IRxParser are
+        // both unreachable in this AOT image now.
         var parser = Json.BuildParser(visitor);
-        var (_, lexerTable) = Json.Build(visitor);
+        var lexerTable = Json.BuildLexer();
 
         using var lexer = PipeBytesLexer.FromString(Sample, lexerTable);
         using var tokens = new AsyncLATokenIterator(lexer);

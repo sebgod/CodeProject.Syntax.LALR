@@ -43,10 +43,10 @@ internal static class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var renderer = new Renderer();
-        // Phase 5 / slice 5: pre-baked parser via BuildParser(visitor); lexer
-        // half still routes through Build (slice 6 will pre-bake that).
+        // Phase 5 / slices 5 + 6: parser + lexer both pre-baked via the
+        // generator. SchemaCompiler is unreachable in the AOT trim graph.
         var parser = BuildParser(renderer);
-        var (_, lexerTable) = Build(renderer);
+        var lexerTable = BuildLexer();
 
         foreach (var src in Samples)
         {
