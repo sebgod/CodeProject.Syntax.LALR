@@ -43,6 +43,7 @@
        drift is now a build break, not a silent divergence. -->
   <ItemGroup>
     <Compile Include="..\CodeProject.Syntax.LALR\Derivation.cs" Link="Derivation.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\LexicalGrammar\ColumnMode.cs" Link="LexicalGrammar\ColumnMode.cs" />
     <Compile Include="..\CodeProject.Syntax.LALR\Schema\GrammarSchema.cs" Link="Schema\GrammarSchema.cs" />
 
     <!--

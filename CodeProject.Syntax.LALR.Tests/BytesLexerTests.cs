@@ -91,22 +91,40 @@ public class BytesLexerTests
     }
 
     [Fact]
-    public void Utf8MultiByte_ColumnIsByteCount()
+    public void Utf8MultiByte_DefaultIsCodepointColumn()
     {
-        // Unicode digit "𝟏" (U+1D7CF MATHEMATICAL BOLD DIGIT ONE) — 4 UTF-8 bytes.
-        // Documented contract: column is bytes, not codepoints. Add an ASCII digit
-        // pattern that allows the bold-digit's UTF-8 leading byte through; the
-        // important assertion is that the *next* token's column reflects byte count.
+        // Default ColumnMode is Codepoints — "𝟏" (U+1D7CF) is one codepoint
+        // even though it's 4 UTF-8 bytes. A digit following it would sit at
+        // column 2, byte offset 4.
         var rules = new LexRule[]
         {
-            new(Number, new GroupRx(Multiplicity.OneOrMore, new CharClassRx(true, [new CharRangeRx(0, 0x10FFFF)]))),
+            new(Number, new CharClassRx(true, [new CharRangeRx(0, 0x10FFFF)])),
         };
         var table = new Dictionary<string, LexRule[]> { { PipeBytesLexer.RootState, rules } };
-        using var lexer = BytesLexer.FromString("𝟏", table);
+        using var lexer = BytesLexer.FromString("𝟏7", table);
         var tokens = Collect(lexer);
-        Assert.Single(tokens);
+        Assert.Equal(2, tokens.Count);
         Assert.Equal(1, tokens[0].Position.Column);
-        // Total bytes consumed = 4 (one codepoint encoded as 4 UTF-8 bytes).
+        // 1 codepoint past 𝟏 — column 2, byte offset 4.
+        Assert.Equal(2, tokens[1].Position.Column);
+        Assert.Equal(4L, tokens[1].Position.ByteOffset);
+    }
+
+    [Fact]
+    public void Utf8MultiByte_BytesMode_ColumnIsByteCount()
+    {
+        // Opt into Bytes mode: 𝟏's 4 UTF-8 bytes contribute 4 to the column.
+        var rules = new LexRule[]
+        {
+            new(Number, new CharClassRx(true, [new CharRangeRx(0, 0x10FFFF)])),
+        };
+        var table = new Dictionary<string, LexRule[]> { { PipeBytesLexer.RootState, rules } };
+        using var lexer = BytesLexer.FromString("𝟏7", table,
+            columnMode: ColumnMode.Bytes);
+        var tokens = Collect(lexer);
+        Assert.Equal(2, tokens.Count);
+        Assert.Equal(1, tokens[0].Position.Column);
+        Assert.Equal(5, tokens[1].Position.Column); // 1 + 4 bytes of 𝟏 = byte column 5.
     }
 
     [Fact]

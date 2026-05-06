@@ -26,6 +26,7 @@ public sealed class BytesLexer : ISyncIterator<Item>
     private readonly Stack<string> _states;
     private readonly LexerErrorMode _errorMode;
     private readonly int _errorSymbolId;
+    private readonly ColumnMode _columnMode;
     private int _position;
     private Item _currentItem;
 
@@ -41,7 +42,8 @@ public sealed class BytesLexer : ISyncIterator<Item>
 
     public BytesLexer(ReadOnlyMemory<byte> bytes, IReadOnlyDictionary<string, LexRule[]> patternTable,
         LexerErrorMode errorMode = LexerErrorMode.Throw,
-        int errorSymbolId = -1)
+        int errorSymbolId = -1,
+        ColumnMode columnMode = ColumnMode.Codepoints)
     {
         ArgumentNullException.ThrowIfNull(patternTable);
         if (!patternTable.ContainsKey(PipeBytesLexer.RootState))
@@ -60,6 +62,7 @@ public sealed class BytesLexer : ISyncIterator<Item>
         _bytes = bytes;
         _errorMode = errorMode;
         _errorSymbolId = errorSymbolId;
+        _columnMode = columnMode;
         _states = new Stack<string>([PipeBytesLexer.RootState]);
         _compiledStates = new Dictionary<string, CompiledState>(patternTable.Count, StringComparer.Ordinal);
         // Same compilation pass as PipeBytesLexer — first-rule-wins falls out of
@@ -85,10 +88,11 @@ public sealed class BytesLexer : ISyncIterator<Item>
 
     /// <summary>Convenience: encode a UTF-16 string to UTF-8 once, then lex synchronously.</summary>
     public static BytesLexer FromString(string text, IReadOnlyDictionary<string, LexRule[]> patternTable,
-        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1)
+        LexerErrorMode errorMode = LexerErrorMode.Throw, int errorSymbolId = -1,
+        ColumnMode columnMode = ColumnMode.Codepoints)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return new BytesLexer(Encoding.UTF8.GetBytes(text), patternTable, errorMode, errorSymbolId);
+        return new BytesLexer(Encoding.UTF8.GetBytes(text), patternTable, errorMode, errorSymbolId, columnMode);
     }
 
     public Item Current
@@ -218,9 +222,12 @@ public sealed class BytesLexer : ISyncIterator<Item>
 
     private void AdvanceCursor(ReadOnlySpan<byte> matched)
     {
-        // Walk the matched bytes once to update line/column/offset. Same byte-
-        // based column convention as PipeBytesLexer — multi-byte UTF-8
-        // sequences advance the column by their byte count.
+        // Mirror PipeBytesLexer.AdvanceCursor — same line/column/offset
+        // semantics, just walking a single span instead of a sequence.
+        // Codepoint mode skips UTF-8 continuation bytes (0b10xxxxxx) so each
+        // codepoint contributes exactly 1 to the column; Bytes mode counts
+        // every byte.
+        var codepointMode = _columnMode == ColumnMode.Codepoints;
         for (var i = 0; i < matched.Length; i++)
         {
             var b = matched[i];
@@ -230,7 +237,7 @@ public sealed class BytesLexer : ISyncIterator<Item>
                 _line++;
                 _column = 1;
             }
-            else
+            else if (!codepointMode || (b & 0xC0) != 0x80)
             {
                 _column++;
             }

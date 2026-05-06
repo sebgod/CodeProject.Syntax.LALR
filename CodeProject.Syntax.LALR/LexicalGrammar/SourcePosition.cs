@@ -10,18 +10,24 @@ namespace CodeProject.Syntax.LALR.LexicalGrammar;
 /// or items built without a position by callers that don't supply one).
 /// </summary>
 /// <remarks>
-/// <see cref="Column"/> is **byte-based** within the line, not codepoint-based — the
-/// lexer never decodes UTF-8 in the hot path, so converting to a codepoint column
-/// would be lossy work for the common case where ASCII columns are sufficient. If
-/// you need codepoint columns for diagnostics, decode the matched bytes yourself
-/// from the source text.
+/// <see cref="Column"/> is reported in whichever mode the lexer was constructed
+/// with — <see cref="ColumnMode.Codepoints"/> by default (one emoji = one column),
+/// or <see cref="ColumnMode.Bytes"/> if the consumer opted in. The lexer doesn't
+/// decode UTF-8 in either mode; codepoint mode skips continuation bytes
+/// (<c>0b10xxxxxx</c>) when bumping the column counter, which is O(1) per byte.
+/// If you have a byte-mode position and need a codepoint column for diagnostics,
+/// <see cref="GetCodepointColumn(ReadOnlySpan{byte})"/> will decode it from the
+/// source text.
 /// </remarks>
 public readonly struct SourcePosition(int line, int column, long byteOffset) : IEquatable<SourcePosition>
 {
     /// <summary>1-based line number; 0 if unknown.</summary>
     public int Line { get; } = line;
 
-    /// <summary>1-based byte column within the line; 0 if unknown.</summary>
+    /// <summary>
+    /// 1-based column within the line; 0 if unknown. Counts codepoints by default;
+    /// counts UTF-8 bytes if the lexer was constructed with <see cref="ColumnMode.Bytes"/>.
+    /// </summary>
     public int Column { get; } = column;
 
     /// <summary>Absolute byte offset from start of input. 0 == first byte; -1 if the position is synthetic.</summary>

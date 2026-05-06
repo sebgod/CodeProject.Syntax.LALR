@@ -225,10 +225,11 @@ public class SourcePositionTests
     }
 
     [Fact]
-    public async Task MultiByteUtf8_AdvancesByByteCount()
+    public async Task MultiByteUtf8_DefaultIsCodepointColumn()
     {
-        // Pattern accepts "€" (3 bytes) once, then a digit. Verify the digit's column
-        // is past the multi-byte sequence's bytes, not past 1 codepoint.
+        // Default ColumnMode is Codepoints — "€" (one codepoint, 3 UTF-8 bytes)
+        // contributes 1 to the column. The digit that follows sits at column 2,
+        // even though its byte offset is 3.
         var rules = new LexRule[]
         {
             new(1, new CharRx(0x20AC)),   // €
@@ -244,7 +245,34 @@ public class SourcePositionTests
 
         Assert.Equal(2, tokens.Count);
         Assert.Equal(new SourcePosition(1, 1, 0), tokens[0].Position); // €
-        // After consuming the 3 bytes of €, the next token sits at byte column 4.
+        // 1 codepoint past €, 3 bytes past €.
+        Assert.Equal(new SourcePosition(1, 2, 3), tokens[1].Position);
+    }
+
+    [Fact]
+    public async Task MultiByteUtf8_BytesMode_AdvancesByByteCount()
+    {
+        // Opt into Bytes mode and verify the column counts every UTF-8 byte —
+        // the legacy semantics, useful when feeding positions into a byte-
+        // oriented index.
+        var rules = new LexRule[]
+        {
+            new(1, new CharRx(0x20AC)),
+            new(2, new CharClassRx(true, [new CharRangeRx('0', '9')])),
+        };
+        var table = new Dictionary<string, LexRule[]>
+        {
+            { PipeBytesLexer.RootState, rules },
+        };
+
+        using var lexer = PipeBytesLexer.FromString("€7", table,
+            columnMode: ColumnMode.Bytes,
+            cancellationToken: TestContext.Current.CancellationToken);
+        var tokens = await CollectAsync(lexer);
+
+        Assert.Equal(2, tokens.Count);
+        Assert.Equal(new SourcePosition(1, 1, 0), tokens[0].Position);
+        // After 3 bytes of €, byte column is 4.
         Assert.Equal(new SourcePosition(1, 4, 3), tokens[1].Position);
     }
 
