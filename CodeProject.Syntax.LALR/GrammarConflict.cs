@@ -73,7 +73,23 @@ public readonly struct GrammarConflict(int state, int lookaheadSymbolId, Conflic
 
     public override bool Equals(object obj) => obj is GrammarConflict other && Equals(other);
 
-    public override int GetHashCode() => HashCode.Combine(State, LookaheadSymbolId, (byte)Kind, ShiftTargetState, ReduceProductionIds?.Length ?? 0);
+    public override int GetHashCode()
+    {
+        // Manual fold rather than System.HashCode.Combine: this file is
+        // <Compile Link>-shared into the netstandard2.0 source generator, and
+        // System.HashCode is .NET Core 2.1+ / netstandard 2.1+ — not available
+        // in netstandard2.0.
+        unchecked
+        {
+            var h = 17;
+            h = h * 31 + State;
+            h = h * 31 + LookaheadSymbolId;
+            h = h * 31 + (byte)Kind;
+            h = h * 31 + ShiftTargetState;
+            h = h * 31 + (ReduceProductionIds?.Length ?? 0);
+            return h;
+        }
+    }
 
     public static bool operator ==(GrammarConflict a, GrammarConflict b) => a.Equals(b);
     public static bool operator !=(GrammarConflict a, GrammarConflict b) => !a.Equals(b);
