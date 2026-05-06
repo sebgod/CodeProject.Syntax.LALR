@@ -21,6 +21,14 @@
     <RootNamespace>Examples.LatexConsole</RootNamespace>
     <AssemblyName>Examples.LatexConsole</AssemblyName>
     <Nullable>enable</Nullable>
+    <!--
+      AOT-clean: Latex.Grammar consumes YamlDotNet only as a build-time
+      analyzer dependency (PrivateAssets="all"); the generated `Latex` partial
+      class has no YamlDotNet references at runtime. Console.Lib + DIR.Lib are
+      both IsAotCompatible=true. Matches Bootstrap/TestProject.
+    -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
