@@ -274,8 +274,10 @@ internal static class TablesEmitter
         sb.AppendLine("    /// <remarks>");
         sb.AppendLine("    /// This factory is action-free: any production in the YAML that named an");
         sb.AppendLine("    /// <c>action:</c> will fall back to the default <c>Reduction</c> at parse");
-        sb.AppendLine("    /// time. Visitor-aware overloads (which wire rewriters in via");
-        sb.AppendLine("    /// <c>BuildActions(visitor)</c>) come in a follow-up slice.");
+        sb.AppendLine("    /// time. To wire a visitor's rewriters in, use the");
+        sb.AppendLine("    /// <c>BuildParser&lt;T&gt;(IVisitor&lt;T&gt;)</c> overload (emitted alongside");
+        sb.AppendLine("    /// the visitor surface in <c>&lt;Name&gt;.Visitor.g.cs</c>) — same pre-baked");
+        sb.AppendLine("    /// <see cref=\"ParseTable\"/>, productions get rewriter delegates spliced in.");
         sb.AppendLine("    /// </remarks>");
         sb.AppendLine("    public static global::CodeProject.Syntax.LALR.Parser BuildParser() =>");
         sb.AppendLine("        new global::CodeProject.Syntax.LALR.Parser(Definition, ParseTable);");
