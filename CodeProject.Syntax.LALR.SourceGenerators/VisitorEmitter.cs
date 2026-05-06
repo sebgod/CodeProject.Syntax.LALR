@@ -21,7 +21,16 @@ namespace CodeProject.Syntax.LALR.SourceGenerators;
 /// </remarks>
 internal static class VisitorEmitter
 {
-    public static string? Emit(GrammarSchema schema, string namespaceName, string className)
+    /// <summary>
+    /// Emit the visitor surface. <paramref name="tablesEmitted"/> tells us whether
+    /// <see cref="TablesEmitter"/> produced a <c>&lt;Name&gt;.Tables.g.cs</c> in this
+    /// build; when it did, we additionally emit a pre-baked <c>BuildParser&lt;T&gt;</c>
+    /// that wires the visitor's rewriters into the pre-baked <c>Definition</c> and
+    /// reuses the pre-baked <c>ParseTable</c> (skipping <see cref="ParserTableBuilder"/>
+    /// at runtime entirely). Suppressed when the tables file is absent (grammar
+    /// conflicts / schema errors), since the references would dangle.
+    /// </summary>
+    public static string? Emit(GrammarSchema schema, string namespaceName, string className, bool tablesEmitted)
     {
         var actions = CollectActions(schema);
         if (actions.Count == 0)
@@ -50,6 +59,14 @@ internal static class VisitorEmitter
         sb.AppendLine();
         EmitBuildWithVisitor(sb);
 
+        if (tablesEmitted)
+        {
+            sb.AppendLine();
+            EmitProductionActionNames(sb, schema);
+            sb.AppendLine();
+            EmitBuildParserWithVisitor(sb);
+        }
+
         sb.AppendLine("}");
         return sb.ToString();
     }
@@ -73,6 +90,101 @@ internal static class VisitorEmitter
         // global:: + fully-qualified — see CodeEmitter.EmitBuild for why.
         sb.AppendLine("    public static (global::CodeProject.Syntax.LALR.Grammar Grammar, Dictionary<string, global::CodeProject.Syntax.LALR.LexicalGrammar.LexRule[]> Lexer) Build<T>(IVisitor<T> visitor) =>");
         sb.AppendLine("        SchemaCompiler.Compile(Schema, BuildActions(visitor));");
+    }
+
+    /// <summary>
+    /// Emits a private flat string[] indexed by the production index used by
+    /// <c>ParseTable.Reduce.ActionParameter</c>. Walks <see cref="GrammarSchema.Productions"/>
+    /// in source order, matching the flatten that <see cref="TablesEmitter"/>'s
+    /// <c>BuildGrammarFromSchema</c> and the runtime <see cref="ParserTableBuilder.PopulateProductions"/>
+    /// both perform — so index alignment with <c>Definition.PrecedenceGroups</c>
+    /// productions is exact. Null entries mark productions without an <c>action:</c>;
+    /// those keep the bare <see cref="Production"/> from <c>Definition</c>.
+    /// </summary>
+    private static void EmitProductionActionNames(StringBuilder sb, GrammarSchema schema)
+    {
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Per-production action name (null when the YAML rule has no <c>action:</c>).");
+        sb.AppendLine("    /// Indexed by flat production index — matches the ordering used by");
+        sb.AppendLine("    /// <see cref=\"global::CodeProject.Syntax.LALR.ParseTable\"/>'s Reduce cells");
+        sb.AppendLine("    /// and by <see cref=\"global::CodeProject.Syntax.LALR.ParserTableBuilder\"/> at runtime.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    private static readonly string[] _productionActionNames = new string[]");
+        sb.AppendLine("    {");
+        if (schema.Productions != null)
+        {
+            foreach (var group in schema.Productions)
+            {
+                if (group?.Rules == null)
+                {
+                    continue;
+                }
+                foreach (var rule in group.Rules)
+                {
+                    if (rule == null)
+                    {
+                        continue;
+                    }
+                    if (string.IsNullOrEmpty(rule.Action))
+                    {
+                        sb.AppendLine("        null,");
+                    }
+                    else
+                    {
+                        sb.Append("        \"").Append(EscapeStringContent(rule.Action)).AppendLine("\",");
+                    }
+                }
+            }
+        }
+        sb.AppendLine("    };");
+    }
+
+    /// <summary>
+    /// Visitor-aware factory paired with the no-arg <c>BuildParser()</c> emitted
+    /// in <c>&lt;Name&gt;.Tables.g.cs</c>. Reconstructs <c>Grammar</c> from the
+    /// pre-baked <c>Definition</c> by swapping in rewriter-bearing
+    /// <see cref="Production"/>s wherever the schema declared an <c>action:</c>;
+    /// reuses the pre-baked <see cref="ParseTable"/> verbatim — the parse table is
+    /// independent of semantic actions, so re-baking it would be wasted work and
+    /// would defeat the trim win. Skips <see cref="ParserTableBuilder"/> entirely.
+    /// </summary>
+    private static void EmitBuildParserWithVisitor(StringBuilder sb)
+    {
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Construct a <see cref=\"global::CodeProject.Syntax.LALR.Parser\"/> against");
+        sb.AppendLine("    /// the pre-baked <c>Definition</c> + <c>ParseTable</c>, with the supplied");
+        sb.AppendLine("    /// visitor's rewriters wired into productions that declared an <c>action:</c>.");
+        sb.AppendLine("    /// Skips <see cref=\"global::CodeProject.Syntax.LALR.ParserTableBuilder\"/>");
+        sb.AppendLine("    /// — the table is reused verbatim from compile time.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    public static global::CodeProject.Syntax.LALR.Parser BuildParser<T>(IVisitor<T> visitor)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        ArgumentNullException.ThrowIfNull(visitor);");
+        sb.AppendLine("        var actions = BuildActions(visitor);");
+        sb.AppendLine("        var srcGroups = Definition.PrecedenceGroups;");
+        sb.AppendLine("        var dstGroups = new global::CodeProject.Syntax.LALR.PrecedenceGroup[srcGroups.Length];");
+        sb.AppendLine("        var prodIndex = 0;");
+        sb.AppendLine("        for (var gi = 0; gi < srcGroups.Length; gi++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var srcGroup = srcGroups[gi];");
+        sb.AppendLine("            var rules = new List<global::CodeProject.Syntax.LALR.Production>();");
+        sb.AppendLine("            foreach (var src in srcGroup.Productions)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var actionName = _productionActionNames[prodIndex++];");
+        sb.AppendLine("                if (actionName != null && actions.TryGetValue(actionName, out var rewriter) && rewriter != null)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    rules.Add(new global::CodeProject.Syntax.LALR.Production(src.Left, rewriter, src.Right));");
+        sb.AppendLine("                }");
+        sb.AppendLine("                else");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    rules.Add(src);");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine("            dstGroups[gi] = new global::CodeProject.Syntax.LALR.PrecedenceGroup(srcGroup.Derivation, rules.ToArray());");
+        sb.AppendLine("        }");
+        sb.AppendLine("        var grammar = new global::CodeProject.Syntax.LALR.Grammar(Definition.SymbolNames, dstGroups);");
+        sb.AppendLine("        return new global::CodeProject.Syntax.LALR.Parser(grammar, ParseTable);");
+        sb.AppendLine("    }");
     }
 
     private readonly struct ActionInfo

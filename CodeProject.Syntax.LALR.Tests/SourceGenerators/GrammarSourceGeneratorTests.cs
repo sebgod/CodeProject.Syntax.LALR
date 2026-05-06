@@ -603,6 +603,163 @@ public class GrammarSourceGeneratorTests
         Assert.Contains("makeAdd", calls);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Phase 5 / slice 4: visitor-aware pre-baked BuildParser<T>(IVisitor<T>)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Actions_VisitorFileEmitsPreBakedBuildParser()
+    {
+        // With a Tables file emitted alongside the visitor file, the visitor
+        // surface includes BuildParser<T>(visitor) — the pre-baked
+        // counterpart to Build<T>(visitor) that skips ParserTableBuilder.
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        Assert.Equal(4, trees.Length);
+
+        var visitorSource = trees.Select(t => t.ToString())
+            .Single(src => src.Contains("interface IVisitor", StringComparison.Ordinal));
+
+        // The flat per-production action-name table — one entry per Production,
+        // null for productions without an `action:`. SampleArithmeticWithActions
+        // has 3 productions: S' -> E (no action), E -> i (makeNum), E -> E + E (makeAdd).
+        Assert.Contains("private static readonly string[] _productionActionNames", visitorSource);
+        Assert.Contains("\"makeNum\"", visitorSource);
+        Assert.Contains("\"makeAdd\"", visitorSource);
+
+        // The visitor-aware BuildParser. Reuses Definition + ParseTable from
+        // the Tables file; only re-walks productions to splice in rewriters.
+        Assert.Contains("public static global::CodeProject.Syntax.LALR.Parser BuildParser<T>(IVisitor<T> visitor)", visitorSource);
+        Assert.Contains("var actions = BuildActions(visitor);", visitorSource);
+        Assert.Contains("Definition.PrecedenceGroups", visitorSource);
+        Assert.Contains("new global::CodeProject.Syntax.LALR.Parser(grammar, ParseTable)", visitorSource);
+    }
+
+    [Fact]
+    public void GrammarConflict_VisitorFileOmitsBuildParser()
+    {
+        // When LALR0004 conflicts kill the Tables file, the visitor file must
+        // not reference Definition / ParseTable — they don't exist. Plain
+        // Build<T>(visitor) remains so the consumer still has a runtime path.
+        const string yaml = """
+            symbols: ["S'", E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,   rhs: [n], action: a }
+                  - { lhs: E,   rhs: [n], action: a }
+            lexer:
+              root:
+                - { symbol: n, match: "[0-9]+" }
+            """;
+
+        var (trees, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0004");
+        var visitorSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("interface IVisitor", StringComparison.Ordinal));
+
+        Assert.DoesNotContain("BuildParser<T>", visitorSource);
+        Assert.DoesNotContain("_productionActionNames", visitorSource);
+        // Build<T>(visitor) survives — it routes through SchemaCompiler at
+        // runtime, which would re-throw the conflict, but the consumer's build
+        // is already failing on LALR0004 so the consumer never gets there.
+        Assert.Contains("Build<T>(IVisitor<T> visitor)", visitorSource);
+    }
+
+    [Fact]
+    public async Task Actions_BuildParserEndToEnd_VisitorWiredIntoPreBakedTable()
+    {
+        // End-to-end mirror of Actions_EndToEnd_StubVisitorParsesInput, but
+        // routed through BuildParser<T>(visitor) — the pre-baked path. The
+        // visitor's rewriters must still fire (proves the splice works) and
+        // the parse-table behaviour must match (proves the pre-baked table
+        // is the same as what ParserTableBuilder would have produced).
+        var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "GenBp");
+        Assert.Empty(diags);
+        Assert.Equal(4, trees.Length);
+
+        const string stubSource = """
+            using System.Collections.Generic;
+            using CodeProject.Syntax.LALR.LexicalGrammar;
+
+            namespace GenBp;
+
+            public sealed class StubVisitor : Arithmetic.IVisitor<object>
+            {
+                public List<string> Calls { get; } = new();
+                public object Visit(Arithmetic.MakeNum node) { Calls.Add("makeNum:" + node.Arg0.Content); return node.Arg0; }
+                public object Visit(Arithmetic.MakeAdd node) { Calls.Add("makeAdd"); return node.Arg0; }
+            }
+            """;
+
+        var allTrees = trees.Add(CSharpSyntaxTree.ParseText(stubSource,
+            cancellationToken: TestContext.Current.CancellationToken));
+
+        var references = new List<MetadataReference>
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(System.Collections.Generic.List<>).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(GrammarSchema).Assembly.Location),
+        };
+        foreach (var name in new[] { "System.Runtime", "System.Collections", "netstandard" })
+        {
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(Assembly.Load(name).Location));
+            }
+            catch { /* best-effort */ }
+        }
+
+        var compilation = CSharpCompilation.Create(
+            "GenBpIntegration",
+            syntaxTrees: allTrees,
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var ms = new MemoryStream();
+        var emitResult = compilation.Emit(ms, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(emitResult.Success,
+            "BuildParser end-to-end compilation failed:\n  "
+            + string.Join("\n  ", emitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
+
+        ms.Position = 0;
+        var asm = Assembly.Load(ms.ToArray());
+
+        var arithmeticType = asm.GetType("GenBp.Arithmetic")!;
+        var stubType = asm.GetType("GenBp.StubVisitor")!;
+        var stub = Activator.CreateInstance(stubType)!;
+
+        // Find the visitor-aware BuildParser overload (BuildParser() no-arg
+        // also exists in Tables.g.cs — we want the generic one).
+        var buildParserOpen = arithmeticType.GetMethods()
+            .Single(m => m.Name == "BuildParser" && m.IsGenericMethodDefinition);
+        var buildParser = buildParserOpen.MakeGenericMethod(typeof(object));
+        var parser = (Parser)buildParser.Invoke(null, new[] { stub })!;
+
+        // Lexer side still goes through SchemaCompiler at runtime (slice 6 territory).
+        // Use the existing Build<T>(visitor) for the lexer half — discarding the
+        // Grammar it returns is cheap (small allocations, no parse-table build).
+        var buildOpen = arithmeticType.GetMethods()
+            .Single(m => m.Name == "Build" && m.IsGenericMethodDefinition);
+        var build = buildOpen.MakeGenericMethod(typeof(object));
+        var buildResult = (ValueTuple<Grammar, Dictionary<string, LexRule[]>>)build.Invoke(null, new[] { stub })!;
+        var lexerTable = buildResult.Item2;
+
+        using var lexer = PipeBytesLexer.FromString("12 + 34", lexerTable,
+            cancellationToken: TestContext.Current.CancellationToken);
+        using var la = new AsyncLATokenIterator(lexer);
+        var debug = new Debug(parser, null, null);
+        var result = await parser.ParseInputAsync(la, debug,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(result.IsError);
+
+        // Visitor was actually dispatched through the pre-baked-table path.
+        var calls = (List<string>)stubType.GetProperty("Calls")!.GetValue(stub)!;
+        Assert.Contains(calls, c => c.StartsWith("makeNum:", StringComparison.Ordinal));
+        Assert.Contains("makeAdd", calls);
+    }
+
     [Fact]
     public void Actions_SchemaAndAstFilesCompileTogether()
     {

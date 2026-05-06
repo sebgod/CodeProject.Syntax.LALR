@@ -173,20 +173,15 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
             context.AddSource(className + ".Ast.g.cs", SourceText.From(astResult.Source, Encoding.UTF8));
         }
 
-        // Phase 3 / slice 2: the visitor interface + actions-dictionary wiring.
-        // Only emitted when at least one production carries an action; otherwise
-        // we'd ship an empty IVisitor + empty dictionary, which is just noise.
-        var visitorSource = VisitorEmitter.Emit(schema, rootNamespace, className);
-        if (visitorSource != null)
-        {
-            context.AddSource(className + ".Visitor.g.cs", SourceText.From(visitorSource, Encoding.UTF8));
-        }
-
         // Phase 5 / slice 3: compiler-compiler — run SchemaCompiler +
         // ParserTableBuilder at build time and emit the populated Grammar +
         // ParseTable as C# literals. Only proceed if structural validation
         // (LALR0003) passed: validation errors above mean we can't trust the
-        // schema enough to build a parse table from it.
+        // schema enough to build a parse table from it. Runs *before* the
+        // visitor emitter so we know whether to wire BuildParser<T>(visitor)
+        // (slice 4) into the visitor file: that overload references the
+        // pre-baked Definition / ParseTable, so it'd dangle without them.
+        var tablesEmitted = false;
         if (validationErrors.Count == 0)
         {
             var emit = TablesEmitter.Emit(schema, rootNamespace, className);
@@ -215,7 +210,19 @@ public sealed class GrammarSourceGenerator : IIncrementalGenerator
             else if (emit.HasSource)
             {
                 context.AddSource(className + ".Tables.g.cs", SourceText.From(emit.Source!, Encoding.UTF8));
+                tablesEmitted = true;
             }
+        }
+
+        // Phase 3 / slice 2: the visitor interface + actions-dictionary wiring.
+        // Only emitted when at least one production carries an action; otherwise
+        // we'd ship an empty IVisitor + empty dictionary, which is just noise.
+        // Phase 5 / slice 4: when the Tables file was also emitted, the visitor
+        // file additionally exposes a pre-baked BuildParser<T>(visitor) factory.
+        var visitorSource = VisitorEmitter.Emit(schema, rootNamespace, className, tablesEmitted);
+        if (visitorSource != null)
+        {
+            context.AddSource(className + ".Visitor.g.cs", SourceText.From(visitorSource, Encoding.UTF8));
         }
     }
 
