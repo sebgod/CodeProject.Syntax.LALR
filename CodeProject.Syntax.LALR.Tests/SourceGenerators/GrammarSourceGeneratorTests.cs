@@ -168,7 +168,7 @@ public class GrammarSourceGeneratorTests
         Assert.Empty(diags);
         // Phase 5 / slice 3 added Tables.g.cs (pre-baked Grammar + ParseTable),
         // so an actionless grammar now emits 2 files: the schema + the tables.
-        Assert.Equal(2, trees.Length);
+        Assert.Equal(3, trees.Length);
 
         // Find the schema file by content (the Tables file doesn't contain
         // "GrammarSchema Schema"; the schema file does).
@@ -285,7 +285,7 @@ public class GrammarSourceGeneratorTests
         // the Tables file (Phase 5 / slice 3). No AST, no visitor.
         var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
         Assert.Empty(diags);
-        Assert.Equal(2, trees.Length);
+        Assert.Equal(3, trees.Length);
         Assert.DoesNotContain(trees, t => t.ToString().Contains("public sealed record", StringComparison.Ordinal));
         Assert.DoesNotContain(trees, t => t.ToString().Contains("interface IVisitor", StringComparison.Ordinal));
     }
@@ -295,7 +295,7 @@ public class GrammarSourceGeneratorTests
     {
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length); // schema + ast + visitor + tables (Phase 5 / slice 3)
+        Assert.Equal(5, trees.Length); // schema + ast + visitor + tables + lexer + lexer
 
         // Find the AST tree by content — the order in the array isn't guaranteed.
         // Distinguish from the visitor tree by looking for the record syntax (the
@@ -448,7 +448,7 @@ public class GrammarSourceGeneratorTests
     {
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length); // schema + ast + visitor + tables
+        Assert.Equal(5, trees.Length); // schema + ast + visitor + tables + lexer
 
         var visitorSource = trees.Select(t => t.ToString())
             .Single(src => src.Contains("interface IVisitor", StringComparison.Ordinal));
@@ -484,7 +484,7 @@ public class GrammarSourceGeneratorTests
         // simple grammars don't have to import SchemaCompiler at all.
         var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
         Assert.Empty(diags);
-        Assert.Equal(2, trees.Length); // schema + tables
+        Assert.Equal(3, trees.Length); // schema + tables + lexer
         var source = trees.Select(t => t.ToString())
             .Single(s => s.Contains("public static GrammarSchema Schema", StringComparison.Ordinal));
         Assert.Contains("public static (global::CodeProject.Syntax.LALR.Grammar Grammar, Dictionary<string, global::CodeProject.Syntax.LALR.LexicalGrammar.LexRule[]> Lexer) Build()", source);
@@ -500,7 +500,7 @@ public class GrammarSourceGeneratorTests
         // grammar has actions) and a typed-visitor one in the visitor file.
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length);
+        Assert.Equal(5, trees.Length);
         var schemaSource = trees.Select(t => t.ToString())
             .Single(s => s.Contains("public static GrammarSchema Schema", StringComparison.Ordinal));
         var visitorSource = trees.Select(t => t.ToString())
@@ -522,7 +522,7 @@ public class GrammarSourceGeneratorTests
         // SchemaCompiler → parser — works end to end.
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "GenVisit");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length);
+        Assert.Equal(5, trees.Length);
 
         const string stubSource = """
             using System.Collections.Generic;
@@ -604,6 +604,141 @@ public class GrammarSourceGeneratorTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // Phase 5 / slice 6: pre-baked lexer + LALR0005
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void SampleArithmetic_EmitsLexerFile()
+    {
+        // The lexer file mirrors what SchemaCompiler.BuildLexer would have produced
+        // at runtime: one LexRule[] per state plus a BuildLexer() factory.
+        var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "MyApp");
+        Assert.Empty(diags);
+        var lexerSource = trees.Select(t => t.ToString())
+            .Single(s => s.Contains("BuildLexer()", StringComparison.Ordinal));
+
+        Assert.Contains("namespace MyApp;", lexerSource);
+        Assert.Contains("public static partial class Arithmetic", lexerSource);
+        // Per-state LexRule[] field, named by state.
+        Assert.Contains("_lex_root", lexerSource);
+        // Constructor expressions reference the runtime IRx public API by FQN.
+        Assert.Contains("global::CodeProject.Syntax.LALR.LexicalGrammar.LexRule", lexerSource);
+        Assert.Contains("global::CodeProject.Syntax.LALR.LexicalGrammar.CharRangeRx", lexerSource);
+        Assert.Contains("global::CodeProject.Syntax.LALR.LexicalGrammar.Multiplicity.OneOrMore", lexerSource);
+        // The whitespace ignore rule's instruction is wired to PipeBytesLexer.Ignore.
+        Assert.Contains("PipeBytesLexer.Ignore", lexerSource);
+    }
+
+    [Fact]
+    public void BadRegex_ReportsLalr0005()
+    {
+        // Trailing backslash is the easiest reproducer: IRxParser throws
+        // FormatException at runtime; the build-time parser does the same and
+        // turns it into LALR0005 so the user sees the build break instead.
+        const string yaml = """
+            symbols: ["S'", E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,    rhs: [n] }
+            lexer:
+              root:
+                - { symbol: n, match: "abc\\" }
+            """;
+
+        var (trees, diags) = RunGenerator(yaml);
+        Assert.Contains(diags, d => d.Id == "LALR0005");
+        // Lexer.g.cs is suppressed when any rule has a regex error — partial
+        // emission with one missing array would just produce a confusing
+        // "ambiguous BuildLexer" if a future user re-defined it locally.
+        Assert.DoesNotContain(trees, t => t.ToString().Contains("BuildLexer()", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BadRegex_DiagnosticIncludesPathLocators()
+    {
+        // The LALR0005 message format: "{file}: lexer.{state}[{ruleIndex}].match \"{pattern}\": {detail}".
+        // Surface the parts the user needs to find the offending rule in YAML.
+        const string yaml = """
+            symbols: ["S'", E, n]
+            productions:
+              - derivation: none
+                rules:
+                  - { lhs: "S'", rhs: [E] }
+                  - { lhs: E,    rhs: [n] }
+            lexer:
+              root:
+                - { symbol: n, match: "(unclosed" }
+            """;
+
+        var (_, diags) = RunGenerator(yaml, "weird.lalr.yaml");
+        var lalr0005 = Assert.Single(diags, d => d.Id == "LALR0005");
+        var msg = lalr0005.GetMessage();
+        Assert.Contains("weird.lalr.yaml", msg);
+        Assert.Contains("lexer.root[0]", msg);
+        Assert.Contains("(unclosed", msg);
+    }
+
+    [Fact]
+    public async Task SampleArithmetic_BuildLexerEndToEnd_ParsesInput()
+    {
+        // The pure pre-baked path: pull the action-free SampleArithmetic through
+        // the generator, compile it, build a Parser via BuildParser() and a lexer
+        // via BuildLexer(), parse "12 + 34", verify accept. SchemaCompiler is
+        // never called at runtime in this flow — only the literal LexRule[]
+        // arrays plus the literal Action[,] table.
+        var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "GenLex");
+        Assert.Empty(diags);
+        Assert.Equal(3, trees.Length);
+
+        var references = new List<MetadataReference>
+        {
+            MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(System.Collections.Generic.List<>).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(GrammarSchema).Assembly.Location),
+        };
+        foreach (var name in new[] { "System.Runtime", "System.Collections", "netstandard" })
+        {
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(Assembly.Load(name).Location));
+            }
+            catch { /* best-effort */ }
+        }
+
+        var compilation = CSharpCompilation.Create(
+            "GenLexIntegration",
+            syntaxTrees: trees,
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var ms = new MemoryStream();
+        var emitResult = compilation.Emit(ms, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(emitResult.Success,
+            "BuildLexer end-to-end compilation failed:\n  "
+            + string.Join("\n  ", emitResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
+
+        ms.Position = 0;
+        var asm = Assembly.Load(ms.ToArray());
+        var arithmeticType = asm.GetType("GenLex.Arithmetic")!;
+
+        var buildParser = arithmeticType.GetMethod("BuildParser", System.Type.EmptyTypes)!;
+        var parser = (Parser)buildParser.Invoke(null, null)!;
+
+        var buildLexer = arithmeticType.GetMethod("BuildLexer")!;
+        var lexerTable = (Dictionary<string, LexRule[]>)buildLexer.Invoke(null, null)!;
+
+        using var lexer = PipeBytesLexer.FromString("12 + 34", lexerTable,
+            cancellationToken: TestContext.Current.CancellationToken);
+        using var la = new AsyncLATokenIterator(lexer);
+        var debug = new Debug(parser, null, null);
+        var result = await parser.ParseInputAsync(la, debug,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(result.IsError);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // Phase 5 / slice 4: visitor-aware pre-baked BuildParser<T>(IVisitor<T>)
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -615,7 +750,7 @@ public class GrammarSourceGeneratorTests
         // counterpart to Build<T>(visitor) that skips ParserTableBuilder.
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "MyApp");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length);
+        Assert.Equal(5, trees.Length);
 
         var visitorSource = trees.Select(t => t.ToString())
             .Single(src => src.Contains("interface IVisitor", StringComparison.Ordinal));
@@ -677,7 +812,7 @@ public class GrammarSourceGeneratorTests
         // is the same as what ParserTableBuilder would have produced).
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "GenBp");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length);
+        Assert.Equal(5, trees.Length);
 
         const string stubSource = """
             using System.Collections.Generic;
@@ -765,11 +900,11 @@ public class GrammarSourceGeneratorTests
     {
         // Slice 1's compile-check, kept around as a smoke test for the combined
         // emission. Slice 2 added the visitor file; Phase 5 / slice 3 added the
-        // tables file — four trees in total; they must all compile together
-        // without naming collisions or missing references.
+        // tables file; slice 6 added the lexer file — five trees in total; they
+        // must all compile together without naming collisions or missing references.
         var (trees, diags) = RunGenerator(SampleArithmeticWithActions, "arithmetic.lalr.yaml", "GenAst");
         Assert.Empty(diags);
-        Assert.Equal(4, trees.Length);
+        Assert.Equal(5, trees.Length);
 
         var references = new List<MetadataReference>
         {
@@ -810,7 +945,7 @@ public class GrammarSourceGeneratorTests
         // every dimension that matters.
         var (trees, diags) = RunGenerator(SampleArithmetic, "arithmetic.lalr.yaml", "GenTest");
         Assert.Empty(diags);
-        Assert.Equal(2, trees.Length);
+        Assert.Equal(3, trees.Length);
 
         var references = new List<MetadataReference>
         {
