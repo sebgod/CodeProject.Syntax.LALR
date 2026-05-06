@@ -44,6 +44,24 @@
   <ItemGroup>
     <Compile Include="..\CodeProject.Syntax.LALR\Derivation.cs" Link="Derivation.cs" />
     <Compile Include="..\CodeProject.Syntax.LALR\Schema\GrammarSchema.cs" Link="Schema\GrammarSchema.cs" />
+
+    <!--
+      Phase 5 / slice 2: link the LALR(1) parse-table builder + the value types
+      it operates on into the generator so the same algorithm can run at build
+      time. These files are deliberately kept LexicalGrammar-free at the
+      type level: the runtime-only bits (Production rewriter, Reduction) live
+      in separate partials/files that we don't link here.
+
+      SymbolName lives in the LexicalGrammar namespace for historical reasons
+      (it's a grammar-level type, not lexical) — linking just the file keeps
+      the namespace stable for runtime callers without forcing a move now.
+    -->
+    <Compile Include="..\CodeProject.Syntax.LALR\LexicalGrammar\SymbolName.cs" Link="LexicalGrammar\SymbolName.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\Grammar.cs" Link="Grammar.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\ParseTable.cs" Link="ParseTable.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\LRItems.cs" Link="LRItems.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\GrammarConflict.cs" Link="GrammarConflict.cs" />
+    <Compile Include="..\CodeProject.Syntax.LALR\ParserTableBuilder.cs" Link="ParserTableBuilder.cs" />
   </ItemGroup>
 
 </Project>

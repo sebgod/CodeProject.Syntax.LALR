@@ -1,62 +1,55 @@
+// Opt into nullable annotations locally: the runtime project sets
+// <Nullable>disable</Nullable> in Directory.Build.props, but Production._rewriter
+// is deliberately annotated `Delegate?` so that the netstandard2.0 generator's
+// <Nullable>enable</Nullable> view doesn't warn on the bare-ctor null assignment.
+// Without this directive the runtime trips CS8632 on the `?`.
+#nullable enable
+
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using CodeProject.Syntax.LALR.LexicalGrammar;
 
 namespace CodeProject.Syntax.LALR;
 
 /// <summary>
-/// A grammatical production
+/// A grammatical production. Linkable partial: `Left`, `Right`, the bare
+/// constructor, and the rewriter-storage field (typed as the base
+/// <see cref="Delegate"/> to keep this file netstandard2.0-friendly) are pure
+/// C# with no <c>LexicalGrammar</c> dependency at the type level. The runtime
+/// partial <see cref="Production.Rewriter"/> adds the strongly-typed
+/// <c>Func&lt;int, Item[], object&gt;</c> ctor + <c>Rewrite</c> method.
+///
+/// `<Compile Link>`-shared into the netstandard2.0 source generator so the
+/// generator can construct productions from a YAML schema at build time
+/// without dragging in <c>LexicalGrammar.Item</c> &amp; co.
 /// </summary>
-public readonly struct Production
+public readonly partial struct Production
 {
-    private readonly Func<int, Item[], object> _rewriter;
+    // Base Delegate so this struct's storage layout is declared in a single
+    // partial. The runtime partial (Production.Rewriter.cs) supplies the
+    // strongly-typed Func<int, Item[], object> ctor and casts back on Rewrite.
+    // Annotated nullable (Delegate?) so the netstandard2.0 generator view
+    // (Nullable=enable) doesn't warn on the `null` assignment in the bare ctor.
+    private readonly Delegate? _rewriter;
 
     public int Left { get; }
 
     public int[] Right { get; }
 
     public Production(int left, params int[] right)
-        : this(left, null, right)
-    {
-        // calls below
-    }
-
-    public Production(int left, Func<int, Item[], object> rewriter, params int[] right)
     {
         Left = left;
         Right = right;
-        _rewriter = rewriter;
+        _rewriter = null;
     }
 
     /// <summary>
-    /// True when this production carries a semantic-action rewriter. The parser
-    /// uses this to distinguish "rewriter present but returned null" (a valid
-    /// content value — e.g. a JSON visitor returning C# null for JSON's null
-    /// literal) from "no rewriter present at all" (parser falls back to building
-    /// a default <see cref="Reduction"/>). Don't replace this with a null check
-    /// on <see cref="Rewrite"/>'s return value — that's exactly the conflation
-    /// this property exists to avoid.
+    /// True when this production carries a semantic-action rewriter. Lives in
+    /// the linkable partial (rather than next to <c>Rewrite</c> in the runtime
+    /// partial) so the netstandard2.0 generator view sees `_rewriter` actually
+    /// read — otherwise CS0414 trips on the field being assigned but never used.
     /// </summary>
     public bool HasRewriter => _rewriter != null;
-
-    public object Rewrite(Item[] children)
-    {
-        return _rewriter?.Invoke(Left, children);
-    }
-}
-
-/// <summary>
-/// A reduced production with all leaf tokens and a reference to the reduced production
-/// </summary>
-public class Reduction(int production, params Item[] children)
-{
-    /// <summary>
-    /// Reference to the reduced production in the production table
-    /// </summary>
-    public int Production { get; } = production;
-
-    public IList<Item> Children { get; } = children;
 }
 
 /// <summary>
@@ -68,7 +61,7 @@ public readonly struct PrecedenceGroup(Derivation derivation, params Production[
 
     public Derivation Derivation { get; } = derivation;
 
-    public IEnumerable<Production> Productions => _productions;
+    public System.Collections.Generic.IEnumerable<Production> Productions => _productions;
 }
 
 /// <summary>
