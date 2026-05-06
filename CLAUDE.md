@@ -11,10 +11,10 @@ The repo was modernized to **.NET 10 / C# 14 / AOT** in 2026; older articles des
 ## Common commands
 
 ```bash
-# Build everything (4 projects in one solution)
+# Build the whole solution (runtime + generator + Bootstrap{,.Stage1} + TestProject + Tui + every example)
 dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
 
-# Run all unit tests (xUnit v3 on Microsoft.Testing.Platform — 149+ cases)
+# Run all unit tests (xUnit v3 on Microsoft.Testing.Platform — 304 cases)
 dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
 
 # Run the test project directly (also via MTP — equivalent, faster startup)
@@ -23,14 +23,24 @@ dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests
 # Run a subset of tests (xUnit v3 on MTP exposes the standard MTP --filter-* options)
 dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug -- --filter-method "*PipeRuneIterator*"
 
-# Run the two demo executables (they invoke the parser end-to-end)
-dotnet run --project Bootstrap/Bootstrap.csproj --no-build -c Debug      # parses BNF with itself
-dotnet run --project TestProject/TestProject.csproj --no-build -c Debug  # arithmetic expression demo
+# Demo executables (each invokes the parser end-to-end)
+dotnet run --project Bootstrap/Bootstrap.csproj                     --no-build -c Debug   # stage 0: BNF parsed by inline grammar
+dotnet run --project Bootstrap.Stage1/Bootstrap.Stage1.csproj       --no-build -c Debug   # stage 1: BNF parsed via YAML pipeline
+dotnet run --project TestProject/TestProject.csproj                 --no-build -c Debug   # arithmetic with constant folding
+dotnet run --project examples/Calculator/Examples.Calculator.csproj --no-build -c Debug   # minimal YAML demo
+dotnet run --project examples/Json/Examples.Json.csproj             --no-build -c Debug   # real JSON via visitor
+dotnet run --project examples/Latex/Examples.Latex.csproj           --no-build -c Debug   # math → Unicode plain text
+dotnet run --project examples/LatexConsole/Examples.LatexConsole.csproj --no-build -c Debug  # math → sixel/sextant terminal raster
+dotnet run --project Tui/CodeProject.Syntax.LALR.Tui.csproj         --no-build -c Debug    # interactive grammar debugger (lalr-tui)
 
-# AOT publish (verifies the library + demo stay AOT-clean)
-dotnet publish Bootstrap/Bootstrap.csproj -c Release
-dotnet publish TestProject/TestProject.csproj -c Release
+# AOT publish (verifies library + every AOT-flagged consumer stay AOT-clean)
+dotnet publish Bootstrap/Bootstrap.csproj                            -c Release
+dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj              -c Release
+dotnet publish TestProject/TestProject.csproj                        -c Release
+dotnet publish examples/LatexConsole/Examples.LatexConsole.csproj    -c Release
 ```
+
+`Tui` is intentionally JIT-only (`<PublishAot>false</PublishAot>` — YamlDotNet runtime deserializer needs reflection, and Tui's purpose is loading arbitrary `*.lalr.yaml` at runtime, so the runtime YAML dependency is unavoidable). Phase 5's pre-baked tables are for *shippable* grammar consumers, not for the Tui live editor.
 
 The demo binaries print step-by-step parse traces in Debug; in Release the `[Conditional("DEBUG")]` traces drop out and only the final accept/reject line is printed.
 
@@ -38,12 +48,20 @@ The demo binaries print step-by-step parse traces in Debug; in Release the `[Con
 
 | Project | Type | Purpose |
 |---|---|---|
-| `CodeProject.Syntax.LALR/` | Library | Grammar model, parser-table generator, runtime parser, lexer infrastructure. `IsAotCompatible=true`, `IsTrimmable=true`. |
-| `Bootstrap/` | Exe (`PublishAot=true`) | Defines a BNF grammar in code and parses a BNF source string with the generated parser. End-to-end smoke test for the byte-DFA lexer path. |
-| `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression grammar with operator precedence; demonstrates rewrite functions on productions. Uses an inline tokenizer (no PowerShell). |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 test project (Microsoft.Testing.Platform runner; `OutputType=Exe`) | Unit tests for the lexical-grammar regex builders, the iterator infrastructure, and the DFA compiler. |
+| `CodeProject.Syntax.LALR/` | Library (net10.0, `IsAotCompatible=true`, `IsTrimmable=true`) | Grammar model, LALR(1) parse-table generator (`ParserTableBuilder`), runtime parser (`Parser`), lexer infrastructure (`PipeBytesLexer`, `IRx` combinators, byte-DFA compiler), `Item` value type, `Schema/` POCOs + `SchemaCompiler`. **The published NuGet package**. |
+| `CodeProject.Syntax.LALR.SourceGenerators/` | Roslyn analyzer (netstandard2.0, `IsRoslynComponent=true`) | YAML grammar source generator. Reads `*.lalr.yaml` AdditionalFiles at build time, emits `<ClassName>.g.cs` (schema), `<ClassName>.Ast.g.cs` (record-per-action), and `<ClassName>.Visitor.g.cs` (typed `IVisitor` interface + `BuildActions`). YamlDotNet is build-time only (`PrivateAssets="all"`). |
+| `Bootstrap/` | Exe (`PublishAot=true`) | **Stage 0**: hand-codes the BNF meta-grammar in C# and parses a BNF source string. Reference implementation — depends only on the runtime library, no generator, no YAML. End-to-end smoke test for the byte-DFA lexer path. |
+| `Bootstrap.Stage1/` | Exe (`PublishAot=true`) | **Stage 1**: same BNF meta-grammar, but defined in `bnf.lalr.yaml` and consumed via the source generator + a typed `IVisitor` implementation. CI diffs stage0 ↔ stage1 Accept output for byte-identical parity. |
+| `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression grammar with operator precedence + constant-folding rewriters. Uses an inline tokenizer instead of `PipeBytesLexer` to show that any `IAsyncIterator<Item>` plugs in. |
+| `Tui/` (assembly `lalr-tui`) | Exe (`PublishAot=false`) | Interactive terminal debugger for live-edited `*.lalr.yaml` grammars. Loads YAML, runs `SchemaCompiler`, builds a `Parser`, displays grammar / lexer / token-stream / parse-table cells in a `Console.Lib` dock layout. AOT-off because YamlDotNet runtime deserializer needs reflection — and Tui's whole purpose is runtime YAML loading. |
+| `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a calculator grammar with three visitor methods. Mirrors the README quick-start. |
+| `examples/Json/` | Exe | Real JSON parser via the YAML pipeline. ~50-line `IVisitor` builds `Dictionary<string, object>` / `List<object>` / primitives. |
+| `examples/Latex.Grammar/` | Library | Shared LaTeX-math grammar: runs the source generator once on `latex.lalr.yaml` and exposes the resulting `Latex` partial class (Schema, AST records, `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this library — one grammar, multiple visitors. |
+| `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math via the shared `Latex.Grammar` library. Visitor renders to Unicode plain text. |
+| `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. Pulls `Console.Lib` (terminal adapters) + `DIR.Lib` (RGBA renderer + font rasterizer + math-layout primitives) from NuGet. |
+| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform runner; `OutputType=Exe`) | 304 tests covering regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, source generator (incl. end-to-end "emit → compile → load → parse"), and parser-semantics regressions. |
 
-Shared MSBuild settings (`TargetFramework`, `LangVersion`, etc.) live in `Directory.Build.props`. Don't put them in individual csprojs.
+Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic build, etc.) live in `Directory.Build.props`. Don't put them in individual csprojs. NuGet metadata, symbol packages, SourceLink, and the bundled-analyzer pack target live on `CodeProject.Syntax.LALR.csproj` (the only `IsPackable=true` project).
 
 ## Architecture: how a parse happens
 
@@ -51,7 +69,7 @@ The pipeline has three stages plus the parser. Each implements/consumes `IAsyncI
 
 1. **Bytes-to-tokens lexer** — `LexicalGrammar/PipeBytesLexer.cs`. Owns a `PipeReader`, drives one **UTF-8 byte DFA per lexer state** over the raw byte stream, emits `Item` tokens. The DFA per state is built at construction by `DfaCompiler.CompileMany` (typed `IRx` AST → codepoint NFA → codepoint DFA via Thompson + subset construction; see `LexicalGrammar/Dfa/DfaCompiler.cs`) and then `Utf8DfaLowering.Lower` (codepoint DFA → byte DFA via the standard UTF-8 chain split; see `LexicalGrammar/Dfa/Utf8DfaLowering.cs`). Each `LexRule(int symbolId, IRx pattern, string instruction)` carries its own action: `#pop`, `#ignore`, or push a named state. Longest match with first-rule-wins on ties. Bytes are UTF-8 decoded to a string only at token boundaries.
 2. **Token lookahead** — `LexicalGrammar/AsyncLATokenIterator.cs`. Wraps any `IAsyncIterator<Item>` to add one-token lookahead.
-3. **Parser** — `Parser.cs`. The parser table is computed once in the constructor: `PopulateProductions → InitSymbols → GenerateLR0Items → ComputeFirstSets → ConvertLR0ItemsToKernels → InitLALRTables → CalculateLookAheads → GenerateParseTable`. `ParseInputAsync` then drives the standard shift/reduce/accept/error loop, consulting `ParseTable.Actions[state, tokenId+1]`.
+3. **Parser** — `Parser.cs` + `ParserTableBuilder.cs`. The parser table is built by `ParserTableBuilder` (pure C#, no `LexicalGrammar` dependency — Phase 5 / slice 1 splits this out so the same algorithm can be linked into the netstandard2.0 source generator and run at compile time). The build pipeline: `PopulateProductions → InitSymbols → GenerateLR0Items → ComputeFirstSets → ConvertLR0ItemsToKernels → InitLALRTables → CalculateLookAheads → GenerateParseTable`. `Parser`'s constructor instantiates the builder and exposes its introspection state (FirstSets, LR0/LR1 items, kernels, gotos, propogations, Productions, Terminals/NonTerminals, Conflicts) via `IReadOnly*` passthrough properties. `Parser.ParseInputAsync` then drives the standard shift/reduce/accept/error loop, consulting `ParseTable.Actions[state, tokenId+1]`.
 
 `LexicalGrammar/PipeRuneIterator.cs` is still in the codebase as a standalone codepoint iterator (`IAsyncLAIterator<int>`) for callers that want UTF-8-decoded codepoints rather than tokens, but no part of the parse pipeline uses it anymore — it's an alternative input path, not a building block of `PipeBytesLexer`.
 
@@ -70,6 +88,7 @@ Grammars are described by:
 - **Library is AOT-compatible (`IsAotCompatible=true`)**. No reflection beyond what BCL collections do; no `dynamic`; no runtime-codegen serializers. If you add a feature, keep it allocation-light and reflection-free, and run `dotnet publish` on `Bootstrap/` to verify no AOT warnings.
 - **`Conditional("DEBUG")` calls compile to no-ops in Release**. Don't put side-effecting work inside `Dump*` / `Flush` methods.
 - **Immutable structs everywhere** in the grammar/parser-table model (`LR0Item`, `LR1Item`, `LALRPropogation`, `Action`, `ParseTable`, `Production`, `PrecedenceGroup`, `Grammar`, `SymbolName`, `CharRx`, etc.). Match that style for any new value types — `readonly struct` with primary constructors and `IEquatable<T>` where equality is meaningful.
+- **Read-only collection types on public properties.** Default to `IReadOnlyList<T>` / `IReadOnlyCollection<T>` / `IReadOnlySet<T>` (or concrete `HashSet<T>` when targeting netstandard2.0 — `IReadOnlySet<T>` is .NET 5+) over `IList<T>` / `ICollection<T>` / `ISet<T>`. The `Parser` introspection surface is the canonical example — all of `FirstSets`, `LR0Items`, `Productions`, `Terminals`, `Conflicts`, etc., expose read-only types because external consumers (`Debug.cs`, `lalr-tui`) only ever read.
 - **`Parser`'s constructor fails fast on unresolved grammar conflicts.** Any S/R or R/R conflict left after the precedence-group derivation pass throws `GrammarConflictException` (with `Conflicts` enumerating each offending state + lookahead + competing productions). Don't catch and ignore — fix the grammar by adding the colliding productions to a `PrecedenceGroup` with `Derivation.LeftMost` / `Derivation.RightMost`, or by restructuring.
 - **`Item` carries a `SourcePosition` (1-based `Line`, byte-based 1-based `Column`, absolute `ByteOffset`).** `PipeBytesLexer` populates it; the parser reduces propagate the leftmost child's position (epsilon reductions take the lookahead's position). `default(SourcePosition)` is `Unknown` (`Line==0`); `Item.EOF` and items built without a position both return Unknown. **Column is bytes, not codepoints** — for codepoint columns, decode the matched bytes from the source text.
 - **`PipeBytesLexer` fails fast on unrecognized bytes by default.** Constructor / factories take a `LexerErrorMode` (`Throw` default, `EmitAndStop`, `EmitAndSkip`) and an `errorSymbolId`. `Throw` raises `LexerException` with the offending byte, `SourcePosition`, and lexer state name. The two emit modes require a non-negative `errorSymbolId` and emit an `Item` with `IsError==true` and `Content` set to the hex byte (e.g. `"\x7E"`). Existing callers that passed `cancellationToken` positionally must switch to named-arg form (`cancellationToken: ct`) since the parameter sits after the new mode/id pair.

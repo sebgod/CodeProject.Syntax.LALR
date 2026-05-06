@@ -78,7 +78,12 @@ For a non-toy example see [`examples/Json/`](examples/Json) — a real JSON
 parser in ~50 visitor lines that builds `Dictionary<string,object>` /
 `List<object>` / primitives. [`examples/Latex/`](examples/Latex) renders
 Wikipedia-style math formulas (\frac, \sqrt, scripts, Greek letters, big
-operators) to Unicode plain text — `\frac{n(n+1)}{2}` → `(n(n + 1))⁄2`.
+operators) to Unicode plain text — `\frac{n(n+1)}{2}` → `(n(n + 1))⁄2` —
+and [`examples/LatexConsole/`](examples/LatexConsole) takes the same
+grammar through a different visitor that builds a TeX-style box layout
+and rasterises it to the terminal as sixel / Unicode sextant blocks /
+half-block ASCII art. One grammar, two visitors — the reusability story
+the source generator was built for.
 
 ---
 
@@ -128,9 +133,12 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `Bootstrap/` | Exe (`PublishAot=true`) | **Stage 0**: hand-codes the BNF meta-grammar in C# and parses a BNF source string with the resulting parser. Reference implementation — depends only on the runtime library, no generator, no YAML. |
 | `Bootstrap.Stage1/` | Exe (`PublishAot=true`) | **Stage 1**: same BNF meta-grammar, but defined in `bnf.lalr.yaml` and consumed via the source generator + visitor pipeline. CI diffs stage0 ↔ stage1 Accept output for byte-identical parity. |
 | `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression demo with operator precedence and constant folding during reduction. Inline C# grammar; uses an inline tokenizer instead of `PipeBytesLexer` to show that any `IAsyncIterator<Item>` plugs in. |
+| `Tui/` (asm `lalr-tui`) | Exe (`PublishAot=false`) | Interactive terminal grammar debugger. Loads `*.lalr.yaml` live, runs `SchemaCompiler`, builds a `Parser`, displays grammar / lexer rules / token stream / parse-table cells in a `Console.Lib` dock layout. JIT-only because YamlDotNet runtime deserializer needs reflection — and Tui's purpose is loading arbitrary YAML at runtime. |
 | `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a calculator grammar (`1 + 2 + 3 + 4 - 5 = 5`) with three visitor methods. Mirrors the README quick-start. |
 | `examples/Json/` | Exe | Real JSON parser via the YAML pipeline. ~50-line `IVisitor` implementation builds `Dictionary<string,object>` / `List<object>` / primitives. |
-| `examples/Latex/` | Exe | Wikipedia-style LaTeX math formulas. Six-level precedence grammar (additive → multiplicative + juxtaposition → unary → scripts → atoms) covering `\frac`, `\sqrt`, super/subscripts, parens, Greek letters and big-operator commands; visitor renders to Unicode plain text. |
+| `examples/Latex.Grammar/` | Library | Shared LaTeX grammar partial class. Source generator runs once on `latex.lalr.yaml` and emits the `Latex` partial (Schema + AST records + `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this — one grammar, multiple visitors. |
+| `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math formulas via the shared `Latex.Grammar`. Visitor renders to Unicode plain text. |
+| `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. NuGet deps: `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer + font rasteriser + math-layout primitives). |
 | `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 304 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic
@@ -234,11 +242,15 @@ decide between shift and reduce at any state.
 
 ### Stage 3: `Parser`
 
-`Parser.cs`. The `Parser` constructor builds the LALR(1) parse table eagerly
-from the `Grammar` (failing fast with `GrammarConflictException` on any
-unresolved S/R or R/R conflict). `ParseInputAsync(IAsyncLAIterator<Item>, Debug?, …)`
-runs the standard parse loop, consulting `ParseTable.Actions[state, tokenId+1]`
-for every shift/reduce/accept/error decision. After each reduce the matching
+`Parser.cs` + `ParserTableBuilder.cs`. The `Parser` constructor delegates to
+`ParserTableBuilder` to build the LALR(1) parse table eagerly from the
+`Grammar` (failing fast with `GrammarConflictException` on any unresolved S/R
+or R/R conflict). The split exists so the same algorithm can be linked into
+the netstandard2.0 source generator and run at compile time as part of Phase 5
+(pre-baked tables / compiler-compiler mode).
+`ParseInputAsync(IAsyncLAIterator<Item>, Debug?, …)` runs the standard parse
+loop, consulting `ParseTable.Actions[state, tokenId+1]` for every
+shift/reduce/accept/error decision. After each reduce the matching
 `Production`'s rewriter (`Func<int, Item[], object>`) builds the reduced node's
 `Content`; productions without a rewriter fall back to a default `Reduction`.
 Visitors that legitimately want to return C# `null` are honoured —
@@ -346,9 +358,10 @@ canonical "non-toy grammar end-to-end via the new pipeline" reference. Lexer
 limitations (no backslash escapes inside strings) are documented in the YAML
 header.
 
-### `examples/Latex` — Wikipedia-style math formulas
+### `examples/Latex` — Wikipedia-style math formulas (Unicode renderer)
 
-`latex.lalr.yaml` plus an `IVisitor<string>` that pretty-prints to Unicode.
+`latex.lalr.yaml` (in `examples/Latex/`, consumed via the shared `Latex.Grammar`
+library) plus an `IVisitor<string>` that pretty-prints to Unicode.
 Six precedence levels (`E → T → F → F2 → P → A`) with a deliberate F/F2
 split so that juxtaposition (`mc^2`, `n(n+1)`) coexists with subtraction
 without an S/R conflict. Handles `\frac{a}{b}`, `\sqrt{x}`, `^` / `_`
@@ -369,6 +382,30 @@ standing latent bug in `Parser.cs` where reductions stashed the LHS symbol
 id on `Item.State` instead of the goto-target parser state, mis-routing
 `Peek().State` lookups when one reduction sat below another reduction's
 children. See `CLAUDE.md` § "Examples are stress tests, not safe demos".
+
+### `examples/LatexConsole` — same grammar, terminal-rasterised math
+
+Same `latex.lalr.yaml` (consumed via the shared `Latex.Grammar` library —
+generator runs once, both consumers see identical emitted code), but the
+visitor builds a `DIR.Lib.MathLayout.Box` tree instead of a string. The Box
+tree is a TeX-lite layout engine: `GlyphBox` for atoms, `HBox` / `KernBox`
+for horizontal composition, `FracBox` / `SqrtBox` for stacked structures
+with bars and vinculums, `SupSubBox` / `LimitsBox` for scripts (right-of for
+ordinary atoms, above/below for big operators like `\sum`, `\int`).
+`Console.Lib.BoxRenderer` then paints the root Box into an RGBA buffer and
+ships it to the terminal as one of three encodings, auto-detected via DA1
+device-attribute query:
+
+| Encoding | Fidelity | Requires |
+|---|---|---|
+| Sixel | best (1px granularity) | sixel-capable terminal (Windows Terminal 1.22+, iTerm2, mintty, xterm +sixel, kitty's image protocol mapper) |
+| Unicode sextant | good (2×3 sub-pixels per cell) | modern Unicode 13 fonts (most current terminal emulators) |
+| Half-block ASCII | universal but coarse | any 24-bit-colour terminal |
+
+Pulls `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer +
+font rasteriser + the math-layout primitives) from NuGet. Demonstrates the
+grammar-as-a-reusable-artefact story end-to-end: one YAML, one source-generator
+run, two completely different output channels.
 
 ---
 
@@ -391,11 +428,14 @@ dotnet run --project TestProject/TestProject.csproj                -c Release   
 dotnet run --project examples/Calculator/Examples.Calculator.csproj -c Release  # minimal YAML demo
 dotnet run --project examples/Json/Examples.Json.csproj            -c Release    # real JSON via visitor
 dotnet run --project examples/Latex/Examples.Latex.csproj          -c Release    # Wikipedia-style math → Unicode
+dotnet run --project examples/LatexConsole/Examples.LatexConsole.csproj -c Release  # same grammar → terminal raster
+dotnet run --project Tui/CodeProject.Syntax.LALR.Tui.csproj        -c Release    # interactive grammar debugger (lalr-tui)
 
-# Native AOT publish (verifies library + demos stay AOT-clean)
-dotnet publish Bootstrap/Bootstrap.csproj                -c Release
-dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj  -c Release
-dotnet publish TestProject/TestProject.csproj            -c Release
+# Native AOT publish (verifies library + AOT-flagged consumers stay AOT-clean)
+dotnet publish Bootstrap/Bootstrap.csproj                                -c Release
+dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj                  -c Release
+dotnet publish TestProject/TestProject.csproj                            -c Release
+dotnet publish examples/LatexConsole/Examples.LatexConsole.csproj        -c Release
 
 # Local NuGet pack (runtime + bundled source generator + YamlDotNet)
 dotnet pack CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj -c Release -o packages
@@ -424,20 +464,26 @@ commit, tag `vX.Y.Z` matching the version, push the tag.
 
 The project is usable as-is and on NuGet. Items still on the list, ranked:
 
-- **Generator-time grammar validation.** S/R + R/R conflicts and unknown-symbol
-  references surface at runtime today (`GrammarConflictException`,
-  `SchemaCompilationException`). Linking `SchemaCompiler` source into the
-  generator (same trick as `GrammarSchema.cs` / `Derivation.cs`) lets the
-  generator run `Compile` at build time and emit `LALR0003` / `LALR0004`
-  Roslyn diagnostics with file/line locators. Surface is bigger than it looks
-  — `SchemaCompiler` transitively pulls in `LexicalGrammar/` (`LexRule`, `IRx`
-  + impls, `IRxParser`).
-- **Generic typed visitor return.** `IVisitor.Visit(…)` returns `object`. A `T`
-  generic on the visitor (and `BuildActions<T>`) would remove the cast at the
-  call site. Defer until a user complains about the cost.
+- **Phase 5 — pre-baked parse tables (compiler-compiler mode).** Today the
+  generator emits a `GrammarSchema` POCO; consumers call
+  `SchemaCompiler.Compile(schema, …)` at runtime to build the LALR(1) parse
+  table. Phase 5 runs the schema compiler + `ParserTableBuilder` *at build
+  time* and emits the populated `Grammar` + `ParseTable.Actions[,]` directly,
+  trimming table-build code out of consumer AOT images and surfacing S/R + R/R
+  conflicts as `LALR0004` Roslyn diagnostics with YAML locators (instead of
+  runtime `GrammarConflictException`). Slice 1 (extract `ParserTableBuilder`
+  from `Parser.cs` so the algorithm becomes pure C# and linkable into the
+  netstandard2.0 generator) has landed; slices 2–5 (link, emit, diagnose,
+  migrate consumers) are in progress.
+- **Generator-time regex validation.** Slice 1 of generator-time validation
+  (`LALR0003` — structural errors via `SchemaValidator`) shipped in 2.1.0.
+  Linking `IRxParser` into the generator would surface bad `match:` regexes
+  at build time too. Naturally pairs with Phase 5 / slice 2 (same linking
+  work).
 - **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based
-  (documented). An optional codepoint-column decoder would help diagnostics-
-  quality positions for non-ASCII grammars.
+  (documented). An optional codepoint-column decoder is available via
+  `SourcePosition.GetCodepointColumn(ReadOnlySpan<byte> source)` for
+  diagnostics-quality positions on non-ASCII grammars.
 - **More example grammars.** TOML config, C declaration syntax (the famous
   "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each
   ships under `examples/`.
