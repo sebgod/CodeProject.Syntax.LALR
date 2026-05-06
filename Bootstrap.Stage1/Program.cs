@@ -51,7 +51,7 @@ internal static class Program
             cts.Cancel();
         };
 
-        MainAsync(args, cts.Token).GetAwaiter().GetResult();
+        MainCore(args, cts.Token);
 
         if (System.Diagnostics.Debugger.IsAttached)
         {
@@ -95,7 +95,7 @@ internal static class Program
         EOL,                        // 24
     }
 
-    private static async Task MainAsync(string[] args, CancellationToken cancellationToken)
+    private static void MainCore(string[] args, CancellationToken cancellationToken)
     {
         // Schema + lexer table come from the source-generated Bnf class (built from
         // bnf.lalr.yaml at compile time). The visitor turns each production action
@@ -103,7 +103,9 @@ internal static class Program
         // stage0 wires into Production constructors directly. Phase 5 / slices 5 +
         // 6: parser via the pre-baked BuildParser(visitor); lexer via the pre-baked
         // BuildLexer(). Both ParserTableBuilder and IRxParser drop out of the AOT
-        // trim graph for this consumer.
+        // trim graph for this consumer. The sync path (BytesLexer +
+        // Parser.ParseInput) skips the async machinery the in-memory BNF input
+        // doesn't need; stage0 keeps the async path as the parity canary.
         var visitor = new BnfVisitor();
         var parser = Bnf.BuildParser(visitor);
         var lexerTable = Bnf.BuildLexer();
@@ -111,10 +113,10 @@ internal static class Program
         var debugger = new Debug(parser, Console.Write, Console.Error.Write);
         var parseTime = System.Diagnostics.Stopwatch.StartNew();
 
-        using var lexer = PipeBytesLexer.FromString(BNF, lexerTable, cancellationToken: cancellationToken);
-        using var tokenIterator = new AsyncLATokenIterator(lexer);
+        using var lexer = BytesLexer.FromString(BNF, lexerTable);
+        using var tokenIterator = new SyncLATokenIterator(lexer);
 
-        var result = await parser.ParseInputAsync(tokenIterator, debugger, cancellationToken: cancellationToken);
+        var result = parser.ParseInput(tokenIterator, debugger, cancellationToken: cancellationToken);
         parseTime.Stop();
         var timeElapsed = $"{parseTime.Elapsed.TotalMilliseconds} ms";
 

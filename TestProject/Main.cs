@@ -25,7 +25,7 @@ internal static class MainClass
             cts.Cancel();
         };
 
-        MainAsync(args, cts.Token).GetAwaiter().GetResult();
+        MainCore(args, cts.Token);
 
         if (System.Diagnostics.Debugger.IsAttached)
         {
@@ -111,7 +111,7 @@ internal static class MainClass
         return null;
     }
 
-    private static async Task MainAsync(string[] args, CancellationToken cancellationToken)
+    private static void MainCore(string[] args, CancellationToken cancellationToken)
     {
         //
         // the following program produces a parse table for the following grammar
@@ -160,8 +160,8 @@ internal static class MainClass
         var parseTime = System.Diagnostics.Stopwatch.StartNew();
 
         var inputSource = TokenizeArithmetic("(24 / 12) + 2 * (3-4)");
-        using var tokenIterator = new AsyncLATokenIterator(inputSource.AsAsync());
-        var result = await parser.ParseInputAsync(tokenIterator, debugger, cancellationToken: cancellationToken);
+        using var tokenIterator = new SyncLATokenIterator(inputSource.AsSync());
+        var result = parser.ParseInput(tokenIterator, debugger, cancellationToken: cancellationToken);
         parseTime.Stop();
         var timeElapsed = $"{parseTime.Elapsed.TotalMilliseconds} ms";
         debugger.WriteFinalToken(

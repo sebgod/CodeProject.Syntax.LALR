@@ -74,7 +74,9 @@ internal static class Program
         };
 
         var visitor = new BoxBuildingVisitor(new BoxStyle(fontPath, fontSize));
-        // Phase 5 / slices 5 + 6: parser + lexer both pre-baked.
+        // Phase 5 / slices 5 + 6 + sync surface: parser + lexer pre-baked, run
+        // through BytesLexer + Parser.ParseInput. Main itself stays async only
+        // because DetectModeAsync needs to probe the terminal.
         var parser = BuildParser(visitor);
         var lexerTable = BuildLexer();
 
@@ -85,10 +87,10 @@ internal static class Program
             SysConsole.WriteLine($"  {src}");
             try
             {
-                using var lexer = PipeBytesLexer.FromString(src, lexerTable);
-                using var tokens = new AsyncLATokenIterator(lexer);
+                using var lexer = BytesLexer.FromString(src, lexerTable);
+                using var tokens = new SyncLATokenIterator(lexer);
 
-                var result = await parser.ParseInputAsync(tokens, debugger: null);
+                var result = parser.ParseInput(tokens, debugger: null);
                 if (result.IsError)
                 {
                     SysConsole.WriteLine($"    <error: {result}>");
