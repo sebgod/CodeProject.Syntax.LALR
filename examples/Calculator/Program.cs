@@ -21,9 +21,13 @@ internal static class Program
     {
         // Grammar.Build(visitor) is generator-emitted alongside Schema /
         // BuildActions; it wraps SchemaCompiler.Compile so consumer code
-        // never has to import that namespace directly.
-        var (grammar, lexerTable) = Grammar.Build(new Calc());
-        var parser = new Parser(grammar);
+        // never has to import that namespace directly. Phase 5 / slice 5:
+        // BuildParser(visitor) is the pre-baked counterpart — same visitor,
+        // ParserTableBuilder is trimmable. Lexer half still routes through
+        // Build (slice 6 will pre-bake that too).
+        var calc = new Calc();
+        var parser = Grammar.BuildParser(calc);
+        var (_, lexerTable) = Grammar.Build(calc);
         const string Input = "1 + 2 + 3 + 4 - 5";
         using var lexer = PipeBytesLexer.FromString(Input, lexerTable);
         using var tokens = new AsyncLATokenIterator(lexer);

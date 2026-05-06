@@ -43,8 +43,10 @@ internal static class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var renderer = new Renderer();
-        var (grammar, lexerTable) = Build(renderer);
-        var parser = new Parser(grammar);
+        // Phase 5 / slice 5: pre-baked parser via BuildParser(visitor); lexer
+        // half still routes through Build (slice 6 will pre-bake that).
+        var parser = BuildParser(renderer);
+        var (_, lexerTable) = Build(renderer);
 
         foreach (var src in Samples)
         {
