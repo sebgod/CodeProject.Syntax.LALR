@@ -12,7 +12,7 @@ that a Roslyn source generator turns into a typed schema, AST records, and a
 visitor surface at build time.
 
 > **Status (May 2026):** .NET 10, C# 14, Native AOT-clean, xUnit v3 test suite
-> (326 tests). Library code is allocation-light, reflection-free, and trim-/AOT-
+> (330 tests). Library code is allocation-light, reflection-free, and trim-/AOT-
 > compatible. Single NuGet package ships the runtime *and* the source generator.
 
 ---
@@ -139,7 +139,7 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `examples/Latex.Grammar/` | Library | Shared LaTeX grammar partial class. Source generator runs once on `latex.lalr.yaml` and emits the `Latex` partial (Schema + AST records + `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this — one grammar, multiple visitors. |
 | `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math formulas via the shared `Latex.Grammar`. Visitor renders to Unicode plain text. |
 | `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. NuGet deps: `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer + font rasteriser + math-layout primitives). |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 326 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
+| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 330 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic
 build, etc.) live in `Directory.Build.props`. NuGet metadata, symbol packages,
@@ -415,7 +415,7 @@ run, two completely different output channels.
 # Build the whole solution
 dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
 
-# Run all tests (xUnit v3 on Microsoft.Testing.Platform — 326 tests)
+# Run all tests (xUnit v3 on Microsoft.Testing.Platform — 330 tests)
 dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
 
 # Run a subset of tests (MTP --filter-method, glob-syntax)
@@ -493,10 +493,12 @@ The project is usable as-is and on NuGet. Items still on the list, ranked:
   parity diff doubles as a sync ↔ async equivalence check. The async
   surface stays available — it's the right shape for stdin / network / on-
   disk streaming inputs that genuinely need `await PipeReader.ReadAsync`.
-- **Codepoint columns on `Item.SourcePosition`.** `Column` is byte-based
-  (documented). An optional codepoint-column decoder is available via
-  `SourcePosition.GetCodepointColumn(ReadOnlySpan<byte> source)` for
-  diagnostics-quality positions on non-ASCII grammars.
+- **Codepoint columns on `Item.SourcePosition` [done].** `Column` defaults
+  to codepoint-counting now (one emoji = one column). Set `columns: bytes`
+  in the YAML schema, or pass `ColumnMode.Bytes` to a lexer constructor,
+  to opt back into UTF-8 byte counting. `SourcePosition.GetCodepointColumn(
+  ReadOnlySpan<byte> source)` still exists for retroactive decoding when
+  someone has a byte-mode position they want to convert.
 - **More example grammars.** TOML config, C declaration syntax (the famous
   "Lexer Hack"), an arithmetic-with-unary-ops upgrade for `TestProject`. Each
   ships under `examples/`.
