@@ -6,8 +6,10 @@ name: dotnet
 #   - push to master       → restore/build/test, pack, upload nupkg+snupkg as
 #                            artifact (no publish)
 #   - push to tag "v*"     → same as master, plus publish to NuGet using
-#                            NUGET_SECRET (NUGET_SECRET is the repo-level secret
-#                            with NuGet.org push permissions)
+#                            NUGET_API_KEY (the SharpAstro org-level secret
+#                            with NuGet.org push permissions; needs to be
+#                            granted to this repo under the org's secret
+#                            "Repositories with access" list)
 #   - pull_request → master → restore/build/test only (no pack, no publish)
 #
 # Conventions:
@@ -112,6 +114,6 @@ jobs:
         # the *.nupkg glob picks both up.
         run: >
           dotnet nuget push "packages/*.nupkg"
-          --api-key "${{ secrets.NUGET_SECRET }}"
+          --api-key "${{ secrets.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
