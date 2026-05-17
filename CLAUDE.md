@@ -30,14 +30,12 @@ dotnet run --project TestProject/TestProject.csproj                 --no-build -
 dotnet run --project examples/Calculator/Examples.Calculator.csproj --no-build -c Debug   # minimal YAML demo
 dotnet run --project examples/Json/Examples.Json.csproj             --no-build -c Debug   # real JSON via visitor
 dotnet run --project examples/Latex/Examples.Latex.csproj           --no-build -c Debug   # math → Unicode plain text
-dotnet run --project examples/LatexConsole/Examples.LatexConsole.csproj --no-build -c Debug  # math → sixel/sextant terminal raster
 dotnet run --project Tui/LALR.CC.Tui.csproj         --no-build -c Debug    # interactive grammar debugger (lalr-tui)
 
 # AOT publish (verifies library + every AOT-flagged consumer stay AOT-clean)
 dotnet publish Bootstrap/Bootstrap.csproj                            -c Release
 dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj              -c Release
 dotnet publish TestProject/TestProject.csproj                        -c Release
-dotnet publish examples/LatexConsole/Examples.LatexConsole.csproj    -c Release
 ```
 
 `Tui` is intentionally JIT-only (`<PublishAot>false</PublishAot>` — YamlDotNet runtime deserializer needs reflection, and Tui's purpose is loading arbitrary `*.lalr.yaml` at runtime, so the runtime YAML dependency is unavoidable). Phase 5's pre-baked tables are for *shippable* grammar consumers, not for the Tui live editor.
@@ -57,8 +55,7 @@ The demo binaries print step-by-step parse traces in Debug; in Release the `[Con
 | `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a calculator grammar with three visitor methods. Mirrors the README quick-start. |
 | `examples/Json/` | Exe | Real JSON parser via the YAML pipeline. ~50-line `IVisitor` builds `Dictionary<string, object>` / `List<object>` / primitives. |
 | `examples/Latex.Grammar/` | Library | Shared LaTeX-math grammar: runs the source generator once on `latex.lalr.yaml` and exposes the resulting `Latex` partial class (Schema, AST records, `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this library — one grammar, multiple visitors. |
-| `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math via the shared `Latex.Grammar` library. Visitor renders to Unicode plain text. |
-| `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. Pulls `Console.Lib` (terminal adapters) + `DIR.Lib` (RGBA renderer + font rasterizer + math-layout primitives) from NuGet. |
+| `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math via the shared `Latex.Grammar` library. Visitor renders to Unicode plain text. (Box-layout / sixel renderer for the same grammar lives in the sibling `sharpastro/Console.Lib` repo under `examples/LatexConsole/`.) |
 | `LALR.CC.Tests/` | xUnit v3 (Microsoft.Testing.Platform runner; `OutputType=Exe`) | 330 tests covering regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, source generator (incl. end-to-end "emit → compile → load → parse"), and parser-semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic build, etc.) live in `Directory.Build.props`. Don't put them in individual csprojs. NuGet metadata, symbol packages, SourceLink, and the bundled-analyzer pack target live on `LALR.CC.csproj` (the only `IsPackable=true` project).

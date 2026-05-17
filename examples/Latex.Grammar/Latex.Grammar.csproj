@@ -5,11 +5,16 @@
     latex.lalr.yaml and exposes the resulting `Latex` partial class (Schema,
     AST records, IVisitor<T>, BuildActions) in namespace Examples.Latex.Grammar.
 
-    Both Examples.Latex (Unicode-string renderer) and Examples.LatexConsole
-    (soft-font sixel/half-block renderer) ProjectReference this library, so
-    they consume IDENTICAL generated code — different visitors, one grammar.
-    That's the reusability story the source generator was built for: grammar
-    is a reusable artifact, not a per-consumer copy.
+    The in-tree consumer Examples.Latex (Unicode-string renderer)
+    ProjectReferences this library. A second consumer — the sixel/sextant/
+    half-block renderer for the same grammar — lives in the sibling
+    `sharpastro/Console.Lib` repo under `examples/LatexConsole/` and depends
+    on the published `SharpAstro.LALR.CC` NuGet package instead (a cross-repo
+    ProjectReference would form a build cycle since Console.Lib takes
+    LALR.CC as a build-time dep). Both visitors consume IDENTICAL generated
+    code — different visitors, one grammar. That's the reusability story
+    the source generator was built for: grammar is a reusable artifact,
+    not a per-consumer copy.
   -->
 
   <PropertyGroup>

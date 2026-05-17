@@ -4,9 +4,11 @@
     Example project: a Wikipedia-style LaTeX math grammar driven by the YAML
     source generator. The grammar itself + its generated `Latex` partial class
     (Schema, AST records, IVisitor<T>, BuildActions) live in the sibling
-    Latex.Grammar library — this Exe is just one consumer. A second consumer
-    (Examples.LatexConsole) renders the same parsed AST as soft-font math
-    typography via Console.Lib + DIR.Lib. One grammar, multiple visitors.
+    Latex.Grammar library — this Exe is just one consumer (Unicode-string
+    rendering). A second consumer that renders the same parsed AST as
+    box-layout / sixel-rasterized math typography lives in the sibling
+    `sharpastro/Console.Lib` repo under `examples/LatexConsole/`. One
+    grammar, multiple visitors.
 
     PublishAot is intentionally off — flip it on if you want to verify AOT
     cleanliness, but the demo is meant for a quick `dotnet run`.
