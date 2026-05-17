@@ -21,7 +21,7 @@ visitor surface at build time.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LALR.CC" Version="2.0.0" />
+  <PackageReference Include="SharpAstro.LALR.CC" Version="2.0.0" />
   <AdditionalFiles  Include="grammar.lalr.yaml" />
 </ItemGroup>
 ```
