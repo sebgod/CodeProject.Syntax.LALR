@@ -78,12 +78,12 @@ For a non-toy example see [`examples/Json/`](examples/Json) — a real JSON
 parser in ~50 visitor lines that builds `Dictionary<string,object>` /
 `List<object>` / primitives. [`examples/Latex/`](examples/Latex) renders
 Wikipedia-style math formulas (\frac, \sqrt, scripts, Greek letters, big
-operators) to Unicode plain text — `\frac{n(n+1)}{2}` → `(n(n + 1))⁄2` —
-and [`examples/LatexConsole/`](examples/LatexConsole) takes the same
-grammar through a different visitor that builds a TeX-style box layout
-and rasterises it to the terminal as sixel / Unicode sextant blocks /
-half-block ASCII art. One grammar, two visitors — the reusability story
-the source generator was built for.
+operators) to Unicode plain text — `\frac{n(n+1)}{2}` → `(n(n + 1))⁄2`.
+A second, terminal-rasterised renderer for the same grammar lives in the
+sibling `sharpastro/Console.Lib` repo under `examples/LatexConsole/` —
+the box-layout visitor + sixel/sextant/half-block paths depend on
+Console.Lib, so the demo was rehomed there to avoid a circular dep when
+Console.Lib started consuming LALR.CC as a build-time dependency.
 
 ---
 
@@ -137,8 +137,7 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `examples/Calculator/` | Exe | Smallest end-to-end YAML-pipeline demo: a calculator grammar (`1 + 2 + 3 + 4 - 5 = 5`) with three visitor methods. Mirrors the README quick-start. |
 | `examples/Json/` | Exe | Real JSON parser via the YAML pipeline. ~50-line `IVisitor` implementation builds `Dictionary<string,object>` / `List<object>` / primitives. |
 | `examples/Latex.Grammar/` | Library | Shared LaTeX grammar partial class. Source generator runs once on `latex.lalr.yaml` and emits the `Latex` partial (Schema + AST records + `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this — one grammar, multiple visitors. |
-| `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math formulas via the shared `Latex.Grammar`. Visitor renders to Unicode plain text. |
-| `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. NuGet deps: `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer + font rasteriser + math-layout primitives). |
+| `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math formulas via the shared `Latex.Grammar`. Visitor renders to Unicode plain text. (Box-layout / sixel renderer for the same grammar lives in `sharpastro/Console.Lib/examples/LatexConsole/`.) |
 | `LALR.CC.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 330 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic
@@ -383,29 +382,17 @@ id on `Item.State` instead of the goto-target parser state, mis-routing
 `Peek().State` lookups when one reduction sat below another reduction's
 children. See `CLAUDE.md` § "Examples are stress tests, not safe demos".
 
-### `examples/LatexConsole` — same grammar, terminal-rasterised math
+### Terminal-rasterised LaTeX — moved to `sharpastro/Console.Lib`
 
-Same `latex.lalr.yaml` (consumed via the shared `Latex.Grammar` library —
-generator runs once, both consumers see identical emitted code), but the
-visitor builds a `DIR.Lib.MathLayout.Box` tree instead of a string. The Box
-tree is a TeX-lite layout engine: `GlyphBox` for atoms, `HBox` / `KernBox`
-for horizontal composition, `FracBox` / `SqrtBox` for stacked structures
-with bars and vinculums, `SupSubBox` / `LimitsBox` for scripts (right-of for
-ordinary atoms, above/below for big operators like `\sum`, `\int`).
-`Console.Lib.BoxRenderer` then paints the root Box into an RGBA buffer and
-ships it to the terminal as one of three encodings, auto-detected via DA1
-device-attribute query:
-
-| Encoding | Fidelity | Requires |
-|---|---|---|
-| Sixel | best (1px granularity) | sixel-capable terminal (Windows Terminal 1.22+, iTerm2, mintty, xterm +sixel, kitty's image protocol mapper) |
-| Unicode sextant | good (2×3 sub-pixels per cell) | modern Unicode 13 fonts (most current terminal emulators) |
-| Half-block ASCII | universal but coarse | any 24-bit-colour terminal |
-
-Pulls `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer +
-font rasteriser + the math-layout primitives) from NuGet. Demonstrates the
-grammar-as-a-reusable-artefact story end-to-end: one YAML, one source-generator
-run, two completely different output channels.
+The box-layout / sixel / sextant / half-block renderer for the same
+`latex.lalr.yaml` grammar now lives in
+`sharpastro/Console.Lib/examples/LatexConsole/`. It was originally a
+consumer of `Console.Lib` from inside this repo; when Console.Lib took a
+build-time dependency on LALR.CC (to bake math rendering into its
+`MarkdownRenderer`), keeping the demo here would have created a circular
+build dep. Moving it to the Console.Lib repo keeps the dep graph linear
+(`LatexConsole → Console.Lib → LALR.CC`) and puts the demo next to the
+library it primarily exercises.
 
 ---
 
@@ -428,14 +415,12 @@ dotnet run --project TestProject/TestProject.csproj                -c Release   
 dotnet run --project examples/Calculator/Examples.Calculator.csproj -c Release  # minimal YAML demo
 dotnet run --project examples/Json/Examples.Json.csproj            -c Release    # real JSON via visitor
 dotnet run --project examples/Latex/Examples.Latex.csproj          -c Release    # Wikipedia-style math → Unicode
-dotnet run --project examples/LatexConsole/Examples.LatexConsole.csproj -c Release  # same grammar → terminal raster
 dotnet run --project Tui/LALR.CC.Tui.csproj        -c Release    # interactive grammar debugger (lalr-tui)
 
 # Native AOT publish (verifies library + AOT-flagged consumers stay AOT-clean)
 dotnet publish Bootstrap/Bootstrap.csproj                                -c Release
 dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj                  -c Release
 dotnet publish TestProject/TestProject.csproj                            -c Release
-dotnet publish examples/LatexConsole/Examples.LatexConsole.csproj        -c Release
 
 # Local NuGet pack (runtime + bundled source generator + YamlDotNet)
 dotnet pack LALR.CC/LALR.CC.csproj -c Release -o packages
@@ -474,7 +459,7 @@ The project is usable as-is and on NuGet. Items still on the list, ranked:
   pre-baked grammar) and get a working pipeline with `ParserTableBuilder` /
   `IRxParser` / the runtime DFA-builder all unreachable — the trimmer drops
   them from the AOT image. All in-tree consumers (`Bootstrap.Stage1`,
-  `Examples.Calculator` / `.Json` / `.Latex` / `.LatexConsole`) route
+  `Examples.Calculator` / `.Json` / `.Latex`) route
   through this path. Build-time diagnostics: `LALR0004` for unresolved S/R +
   R/R conflicts; `LALR0005` for malformed `match:` regexes — both with YAML
   file locators, replacing the old "boom on first parse" runtime exceptions.
@@ -488,7 +473,7 @@ The project is usable as-is and on NuGet. Items still on the list, ranked:
   as `PipeBytesLexer` but without the `PipeReader` + `Task` machinery;
   `Parser.ParseInput` is a no-await mirror of `ParseInputAsync`. All in-tree
   in-memory consumers (`Bootstrap.Stage1`, `TestProject`, `Examples.Calculator`
-  / `.Json` / `.Latex` / `.LatexConsole`) route through the sync path now;
+  / `.Json` / `.Latex`) route through the sync path now;
   `Bootstrap` (stage 0) deliberately stays on the async path so the stage-
   parity diff doubles as a sync ↔ async equivalence check. The async
   surface stays available — it's the right shape for stdin / network / on-
