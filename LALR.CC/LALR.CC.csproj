@@ -18,7 +18,7 @@
        (PackageId, Description, tags, release notes) are local. -->
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <PackageId>LALR.CC</PackageId>
+    <PackageId>SharpAstro.LALR.CC</PackageId>
     <Description>LALR(1) parser-table generator and runtime in C#. Includes a YAML grammar source generator that emits a typed AST + visitor surface from `*.lalr.yaml` files at build time.</Description>
     <PackageTags>lalr;parser;parser-generator;lexer;yaml;source-generator;roslyn</PackageTags>
   </PropertyGroup>
