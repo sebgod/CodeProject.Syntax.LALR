@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
-using CodeProject.Syntax.LALR;
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using LALR.CC;
+using LALR.CC.LexicalGrammar;
 
 namespace Examples.Calculator;
 

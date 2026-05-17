@@ -15,8 +15,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
-    <ProjectReference Include="..\..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+    <ProjectReference Include="..\..\LALR.CC\LALR.CC.csproj" />
+    <ProjectReference Include="..\..\LALR.CC.SourceGenerators\LALR.CC.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>

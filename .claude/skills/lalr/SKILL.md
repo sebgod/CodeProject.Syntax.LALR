@@ -1,6 +1,6 @@
 ---
 name: lalr
-description: Bootstrap context for the CodeProject.Syntax.LALR repo. Run at the start of a session to recover the canonical state — phase status, where the YAML/schema/generator/visitor pipeline lives, the verification commands that must pass before committing, and the ranked list of outstanding work. Invoke when you need "what is this repo and what should I do next?".
+description: Bootstrap context for the LALR.CC repo. Run at the start of a session to recover the canonical state — phase status, where the YAML/schema/generator/visitor pipeline lives, the verification commands that must pass before committing, and the ranked list of outstanding work. Invoke when you need "what is this repo and what should I do next?".
 ---
 
 # LALR repo skill
@@ -19,15 +19,15 @@ LALR(1) parser-table generator + runtime in C# (.NET 10 / AOT). Modernised in 20
 |---|---|---|
 | Modernisation | ✅ | .NET 10 / C# 14 / AOT, byte-DFA lexer pipeline (`PipeBytesLexer`), xUnit v3 on MTP, fail-fast diagnostics across all layers (`GrammarConflictException`, `LexerException`, `ParseErrorException`), `Item.SourcePosition`. |
 | Schema layer (1) | ✅ | `Schema/GrammarSchema.cs` POCOs, `Schema/IRxParser.cs` regex dialect, `Schema/SchemaCompiler.cs`. Pure C# data → `(Grammar, LexRule[])`. |
-| Source generator (2) | ✅ | `CodeProject.Syntax.LALR.SourceGenerators` — Roslyn `IIncrementalGenerator` consumes `*.lalr.yaml` AdditionalFiles, emits `<ClassName>.g.cs` with `GrammarSchema Schema { get; }`. YamlDotNet build-time only. |
+| Source generator (2) | ✅ | `LALR.CC.SourceGenerators` — Roslyn `IIncrementalGenerator` consumes `*.lalr.yaml` AdditionalFiles, emits `<ClassName>.g.cs` with `GrammarSchema Schema { get; }`. YamlDotNet build-time only. |
 | Typed AST (3a) | ✅ | `AstEmitter` writes `<ClassName>.Ast.g.cs` — `public sealed record <Action>(Item Arg0, …)` per distinct action. Arity conflicts surface as `LALR0002`. |
 | Visitor + wiring (3b) | ✅ | `VisitorEmitter` writes `<ClassName>.Visitor.g.cs` — nested `IVisitor` with one `Visit(<Record>)` overload per action. `BuildActions(IVisitor)` constructs the record from the parser's reduction frame and dispatches by C# overload resolution. |
 | Self-host (4) | ✅ | `Bootstrap.Stage1/` consumes `bnf.lalr.yaml` end-to-end. `Bootstrap/` (stage0) keeps the inline grammar as the no-generator-no-YAML reference; both produce byte-identical Accept output. |
 | JSON example | ✅ | `examples/Json/` parses real JSON with a 50-line visitor that builds `Dictionary<string,object>` / `List<object>` / primitives. Demonstrates the pipeline on a grammar nobody designed for this parser. |
-| NuGet packaging + CI | ✅ | Runtime project packs `CodeProject.Syntax.LALR.{nupkg,snupkg}` with the source generator + YamlDotNet bundled in `analyzers/dotnet/cs/` (so PackageReference consumers don't need the analyzer-DLL workaround). Deterministic + SourceLink + symbols. `.github/workflows/dotnet.yml` builds + tests + stage-parity-checks on push, packs + uploads artifact on master, publishes to NuGet on `v*` tag using `NUGET_SECRET`. |
+| NuGet packaging + CI | ✅ | Runtime project packs `LALR.CC.{nupkg,snupkg}` with the source generator + YamlDotNet bundled in `analyzers/dotnet/cs/` (so PackageReference consumers don't need the analyzer-DLL workaround). Deterministic + SourceLink + symbols. `.github/workflows/dotnet.yml` builds + tests + stage-parity-checks on push, packs + uploads artifact on master, publishes to NuGet on `v*` tag using `NUGET_SECRET`. |
 | 2.1.0 features | ✅ | (a) `SourcePosition.GetCodepointColumn(ReadOnlySpan<byte> source)` for diagnostics-quality non-ASCII columns. (b) Generic `IVisitor<out T>` + `BuildActions<T>` so evaluators can return typed values directly (`IVisitor<int>` etc.) instead of always boxing to `object`. (c) `LALR0003` Roslyn diagnostics from a generator-side `SchemaValidator` — unknown symbol refs, missing root state, duplicate symbols, mutually-exclusive lexer instructions surface at build time instead of runtime. |
 | LaTeX rich-render example | ✅ | `examples/Latex.Grammar/` (shared `Latex` partial class — generator runs once) feeds two consumers: `examples/Latex/` (Unicode-string visitor) and `examples/LatexConsole/` (Box-layout visitor → sixel/sextant/half-block via `Console.Lib.BoxRenderer` + `DIR.Lib.MathLayout`). Both ship `PublishAot=true`. |
-| `lalr-tui` debugger | ✅ | `Tui/CodeProject.Syntax.LALR.Tui.csproj` (alias `lalr-tui`). Loads `*.lalr.yaml` live, runs `SchemaCompiler` + builds the `Parser`, displays grammar / lexer rules / token stream / parse-table cells in a `Console.Lib` dock layout. AOT-off because YamlDotNet runtime deserializer needs reflection — Phase 5 doesn't unblock this (Tui edits arbitrary YAML at runtime, so YamlDotNet stays). |
+| `lalr-tui` debugger | ✅ | `Tui/LALR.CC.Tui.csproj` (alias `lalr-tui`). Loads `*.lalr.yaml` live, runs `SchemaCompiler` + builds the `Parser`, displays grammar / lexer rules / token stream / parse-table cells in a `Console.Lib` dock layout. AOT-off because YamlDotNet runtime deserializer needs reflection — Phase 5 doesn't unblock this (Tui edits arbitrary YAML at runtime, so YamlDotNet stays). |
 | Phase 5 / slice 1 (compiler-compiler) | ✅ | `Parser.cs` table-construction extracted into `ParserTableBuilder.cs` — pure C#, no `LexicalGrammar` dependency, identical public API on `Parser` (delegates via passthrough). Sets up the netstandard2.0 link path for slice 2. Also tightened all introspection-property types from `IList<>` / `ICollection<>` / `ISet<>` / `HashSet<int>[]` to `IReadOnly*` (or concrete `HashSet<int>` for the IReadOnlySet-needing ones, since the latter is .NET 5+ and the builder will be linked into netstandard2.0). |
 | Phase 5 / slice 2 (compiler-compiler) | ✅ | `ParserTableBuilder` + dependencies (`Grammar`, `ParseTable`, `LRItems`, `GrammarConflict`, `SymbolName`) now `<Compile Link>`-shared into the netstandard2.0 source generator. Required: extracting `Reduction` to its own file, splitting `Production` into a `partial readonly struct` (linkable partial owns `Left`/`Right`/`HasRewriter` + `Delegate?` storage; runtime partial in `Production.Rewriter.cs` adds the strongly-typed `Func<int, Item[], object>` ctor + `Rewrite()`), and replacing `HashCode.Combine` (netstandard 2.1+) with a manual fold. Generator can now run table-build at compile time. |
 | Phase 5 / slice 3 (compiler-compiler) | ✅ | New `TablesEmitter` runs `ParserTableBuilder` at build time and emits `<Name>.Tables.g.cs` with `Definition` (Grammar literal), `ParseTable` (Action[,] literal), and `BuildParser()` factory. New `Parser(Grammar, ParseTable)` ctor skips table-build (introspection getters throw `NotSupportedException` on this path; `Productions`/`NonTerminals` derived directly from `Grammar`). New `LALR0004` Roslyn diagnostic surfaces unresolved S/R + R/R conflicts at build time with YAML locator (replaces `GrammarConflictException` for pre-baked consumers). 306/306 tests, stage parity holds. Action-free `BuildParser()` only — visitor-aware overload is slice 4. |
@@ -35,8 +35,8 @@ LALR(1) parser-table generator + runtime in C# (.NET 10 / AOT). Modernised in 20
 ## Canonical re-verification (run before any commit)
 
 ```bash
-dotnet build CodeProject.Syntax.LALR.sln -c Debug --nologo                                # 0 warnings
-dotnet test  CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug  # 304+ pass
+dotnet build LALR.CC.sln -c Debug --nologo                                # 0 warnings
+dotnet test  LALR.CC.Tests/LALR.CC.Tests.csproj -c Debug  # 304+ pass
 dotnet run   --project Bootstrap/Bootstrap.csproj                  -c Release --no-build  # ends "Accept (…)"
 dotnet run   --project Bootstrap.Stage1/Bootstrap.Stage1.csproj    -c Release --no-build  # ends "Accept (…)"
 dotnet run   --project TestProject/TestProject.csproj              -c Release --no-build  # ends "Accept (…): S' -> [0]"
@@ -45,10 +45,10 @@ dotnet publish Bootstrap/Bootstrap.csproj                           -c Release  
 dotnet publish Bootstrap.Stage1/Bootstrap.Stage1.csproj             -c Release            # AOT clean
 dotnet publish TestProject/TestProject.csproj                       -c Release            # AOT clean
 dotnet publish examples/LatexConsole/Examples.LatexConsole.csproj   -c Release            # AOT clean (Latex.Grammar consumer)
-dotnet pack CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj -c Release -o packages # nupkg + snupkg
+dotnet pack LALR.CC/LALR.CC.csproj -c Release -o packages # nupkg + snupkg
 ```
 
-To cut a release: bump `<Version>` in `CodeProject.Syntax.LALR.csproj`, commit, tag `vX.Y.Z` matching the version, push the tag. The CI workflow's publish job verifies tag-matches-csproj before pushing to NuGet.
+To cut a release: bump `<Version>` in `LALR.CC.csproj`, commit, tag `vX.Y.Z` matching the version, push the tag. The CI workflow's publish job verifies tag-matches-csproj before pushing to NuGet.
 
 **Stage parity check** — when changes touch the YAML/schema/generator/visitor stack, diff stage0 vs stage1 Accept output (timing-stripped):
 
@@ -86,6 +86,6 @@ EBNF, YACC/Bison, ANTLR4, GOLD all have format-specific edge cases (EBNF's `{}`/
 - `Bootstrap/Program.cs` — the always-buildable reference grammar (no generator, no YAML)
 - `Bootstrap.Stage1/Program.cs` — the same grammar, pipeline-driven
 - `bnf.lalr.yaml` (Stage1) — what a real grammar definition looks like
-- `CodeProject.Syntax.LALR.Tests/SourceGenerators/` — driving the generator under test
+- `LALR.CC.Tests/SourceGenerators/` — driving the generator under test
 
 When something breaks in the pipeline, the diagnosis order is: (1) does Bootstrap (stage0) still parse? if yes, the runtime is fine — move on. (2) does `dotnet build` of `Bootstrap.Stage1` succeed? if yes, the generator + YAML loader work — move to runtime. (3) does the test suite pass? (4) only then dive into the specific symptom.
