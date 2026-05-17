@@ -452,7 +452,7 @@ is printed.
 - Restore, build (Release), test, stage0-vs-stage1 Accept-output diff.
 - On master push: also pack the runtime nupkg + snupkg and upload as a build artifact.
 - On `v*` tag push: verify the tag matches the csproj `<Version>`, then publish
-  to NuGet using the `NUGET_SECRET` repo secret (`--skip-duplicate` for
+  to NuGet using the `NUGET_API_KEY` org secret (`--skip-duplicate` for
   idempotent re-runs). The `.snupkg` is auto-routed to symbols.nuget.org.
 
 To cut a release: bump `<Version>` in `LALR.CC/LALR.CC.csproj`,
