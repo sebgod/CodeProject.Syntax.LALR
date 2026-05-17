@@ -8,7 +8,7 @@
 
     In-tree this uses ProjectReference (same pattern as examples/Json); a
     fresh consumer outside this repo would swap to a single PackageReference
-    on `CodeProject.Syntax.LALR` and drop the explicit generator hookup.
+    on `LALR.CC` and drop the explicit generator hookup.
   -->
 
   <PropertyGroup>
@@ -18,8 +18,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
-    <ProjectReference Include="..\..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+    <ProjectReference Include="..\..\LALR.CC\LALR.CC.csproj" />
+    <ProjectReference Include="..\..\LALR.CC.SourceGenerators\LALR.CC.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>

@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
-using CodeProject.Syntax.LALR;
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using LALR.CC;
+using LALR.CC.LexicalGrammar;
 using LatexGrammar;
 // `using static` exposes the nested types of the partial Latex class
 // (IVisitor<T>, Add, Subtract, …) directly so we don't have to write

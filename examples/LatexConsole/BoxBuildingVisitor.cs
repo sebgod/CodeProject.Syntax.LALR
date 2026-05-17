@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using LALR.CC.LexicalGrammar;
 using LatexGrammar;
 using static LatexGrammar.Latex;
 using DIR.Lib;

@@ -1,8 +1,8 @@
 using System.Text;
-using CodeProject.Syntax.LALR;
+using LALR.CC;
 using CL = global::Console.Lib;
 
-namespace CodeProject.Syntax.LALR.Tui.Model;
+namespace LALR.CC.Tui.Model;
 
 /// <summary>
 /// One row of the parse-table view: the action/goto cells for a single LALR

@@ -16,14 +16,14 @@
 
     <Authors>Phillip Voyle, Sebastian Godelet</Authors>
     <Copyright>Copyright © 2011 Phillip Voyle</Copyright>
-    <Product>CodeProject.Syntax.LALR</Product>
+    <Product>LALR.CC</Product>
     <NeutralLanguage>en</NeutralLanguage>
 
     <!-- Shared package metadata. Per-project csproj enables packing on the
-         packable projects (only CodeProject.Syntax.LALR today) and overrides
+         packable projects (only LALR.CC today) and overrides
          per-package fields. -->
-    <PackageProjectUrl>https://github.com/sebgod/CodeProject.Syntax.LALR</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/sebgod/CodeProject.Syntax.LALR.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/sharpastro/LALR.CC</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sharpastro/LALR.CC.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>

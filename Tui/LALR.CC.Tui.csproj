@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Terminal UI debugger for LALR grammars. Loads a *.lalr.yaml file, runs it
+    through SchemaCompiler, and shows the resulting Grammar / lexer rules /
+    token stream in a Console.Lib-driven dock layout. Inspired by GOLD Parser
+    (the windows-only original). Cross-platform — net10.0, no -windows TFM.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>LALR.CC.Tui</RootNamespace>
+    <AssemblyName>lalr-tui</AssemblyName>
+    <!--
+      AOT is intentionally OFF for the TUI. YamlDotNet's reflection-based
+      deserializer doesn't survive trimming (the schema POCOs work, but
+      YamlDotNet's own internals do not — IL2104/IL3053 warnings from the
+      package itself, not from our code). Switching to StaticDeserializerBuilder
+      would require generating per-type binders for the schema, which is on
+      the roadmap once Phase 5 (compiler-compiler / pre-baked tables) lands —
+      that generator can emit the static deserializer too. Until then this
+      project ships as a JIT exe; the runtime library + Bootstrap + examples
+      remain AOT-clean.
+    -->
+    <PublishAot>false</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LALR.CC\LALR.CC.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- YamlDotNet — used to deserialize *.lalr.yaml into GrammarSchema at
+         runtime (matches what the source generator does at build time). -->
+    <PackageReference Include="YamlDotNet" Version="17.1.0" />
+  </ItemGroup>
+
+  <!--
+    Console.Lib — dock layout, TreeView, TextArea, ScrollableList, VtStyle.
+    Mirrors the DIR.Lib pattern from Console.Lib's own csproj: when a sibling
+    working copy of `sharpastro/Console.Lib` exists on disk we pick it up as
+    a ProjectReference (great for in-tree iteration of TUI features), otherwise
+    fall back to the published NuGet package. The switch is controlled by the
+    `UseLocalConsoleLib` MSBuild property and can be forced explicitly.
+  -->
+  <PropertyGroup>
+    <UseLocalConsoleLib Condition="'$(UseLocalConsoleLib)' == '' AND Exists('..\..\..\sharpastro\Console.Lib\src\Console.Lib\Console.Lib.csproj')">true</UseLocalConsoleLib>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(UseLocalConsoleLib)' == 'true'">
+    <ProjectReference Include="..\..\..\sharpastro\Console.Lib\src\Console.Lib\Console.Lib.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseLocalConsoleLib)' != 'true'">
+    <PackageReference Include="Console.Lib" Version="2.10.501" />
+  </ItemGroup>
+
+</Project>
