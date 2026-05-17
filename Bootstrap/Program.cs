@@ -4,8 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using CodeProject.Syntax.LALR;
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using LALR.CC;
+using LALR.CC.LexicalGrammar;
 
 namespace Bootstrap;
 

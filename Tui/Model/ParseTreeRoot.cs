@@ -1,6 +1,6 @@
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using LALR.CC.LexicalGrammar;
 
-namespace CodeProject.Syntax.LALR.Tui.Model;
+namespace LALR.CC.Tui.Model;
 
 /// <summary>
 /// Adapts a parser <see cref="Item"/> tree (terminal tokens at leaves, <see cref="Reduction"/>s

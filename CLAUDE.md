@@ -12,16 +12,16 @@ The repo was modernized to **.NET 10 / C# 14 / AOT** in 2026; older articles des
 
 ```bash
 # Build the whole solution (runtime + generator + Bootstrap{,.Stage1} + TestProject + Tui + every example)
-dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
+dotnet build LALR.CC.sln -c Debug          # or -c Release
 
 # Run all unit tests (xUnit v3 on Microsoft.Testing.Platform — 330 cases)
-dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
+dotnet test LALR.CC.Tests/LALR.CC.Tests.csproj -c Debug
 
 # Run the test project directly (also via MTP — equivalent, faster startup)
-dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
+dotnet run --project LALR.CC.Tests/LALR.CC.Tests.csproj -c Debug
 
 # Run a subset of tests (xUnit v3 on MTP exposes the standard MTP --filter-* options)
-dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug -- --filter-method "*PipeRuneIterator*"
+dotnet run --project LALR.CC.Tests/LALR.CC.Tests.csproj -c Debug -- --filter-method "*PipeRuneIterator*"
 
 # Demo executables (each invokes the parser end-to-end)
 dotnet run --project Bootstrap/Bootstrap.csproj                     --no-build -c Debug   # stage 0: BNF parsed by inline grammar
@@ -31,7 +31,7 @@ dotnet run --project examples/Calculator/Examples.Calculator.csproj --no-build -
 dotnet run --project examples/Json/Examples.Json.csproj             --no-build -c Debug   # real JSON via visitor
 dotnet run --project examples/Latex/Examples.Latex.csproj           --no-build -c Debug   # math → Unicode plain text
 dotnet run --project examples/LatexConsole/Examples.LatexConsole.csproj --no-build -c Debug  # math → sixel/sextant terminal raster
-dotnet run --project Tui/CodeProject.Syntax.LALR.Tui.csproj         --no-build -c Debug    # interactive grammar debugger (lalr-tui)
+dotnet run --project Tui/LALR.CC.Tui.csproj         --no-build -c Debug    # interactive grammar debugger (lalr-tui)
 
 # AOT publish (verifies library + every AOT-flagged consumer stay AOT-clean)
 dotnet publish Bootstrap/Bootstrap.csproj                            -c Release
@@ -48,8 +48,8 @@ The demo binaries print step-by-step parse traces in Debug; in Release the `[Con
 
 | Project | Type | Purpose |
 |---|---|---|
-| `CodeProject.Syntax.LALR/` | Library (net10.0, `IsAotCompatible=true`, `IsTrimmable=true`) | Grammar model, LALR(1) parse-table generator (`ParserTableBuilder`), runtime parser (`Parser`), lexer infrastructure (`PipeBytesLexer`, `IRx` combinators, byte-DFA compiler), `Item` value type, `Schema/` POCOs + `SchemaCompiler`. **The published NuGet package**. |
-| `CodeProject.Syntax.LALR.SourceGenerators/` | Roslyn analyzer (netstandard2.0, `IsRoslynComponent=true`) | YAML grammar source generator. Reads `*.lalr.yaml` AdditionalFiles at build time, emits `<ClassName>.g.cs` (schema), `<ClassName>.Ast.g.cs` (record-per-action), and `<ClassName>.Visitor.g.cs` (typed `IVisitor` interface + `BuildActions`). YamlDotNet is build-time only (`PrivateAssets="all"`). |
+| `LALR.CC/` | Library (net10.0, `IsAotCompatible=true`, `IsTrimmable=true`) | Grammar model, LALR(1) parse-table generator (`ParserTableBuilder`), runtime parser (`Parser`), lexer infrastructure (`PipeBytesLexer`, `IRx` combinators, byte-DFA compiler), `Item` value type, `Schema/` POCOs + `SchemaCompiler`. **The published NuGet package**. |
+| `LALR.CC.SourceGenerators/` | Roslyn analyzer (netstandard2.0, `IsRoslynComponent=true`) | YAML grammar source generator. Reads `*.lalr.yaml` AdditionalFiles at build time, emits `<ClassName>.g.cs` (schema), `<ClassName>.Ast.g.cs` (record-per-action), and `<ClassName>.Visitor.g.cs` (typed `IVisitor` interface + `BuildActions`). YamlDotNet is build-time only (`PrivateAssets="all"`). |
 | `Bootstrap/` | Exe (`PublishAot=true`) | **Stage 0**: hand-codes the BNF meta-grammar in C# and parses a BNF source string. Reference implementation — depends only on the runtime library, no generator, no YAML. End-to-end smoke test for the byte-DFA lexer path. |
 | `Bootstrap.Stage1/` | Exe (`PublishAot=true`) | **Stage 1**: same BNF meta-grammar, but defined in `bnf.lalr.yaml` and consumed via the source generator + a typed `IVisitor` implementation. CI diffs stage0 ↔ stage1 Accept output for byte-identical parity. |
 | `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression grammar with operator precedence + constant-folding rewriters. Uses an inline tokenizer instead of `PipeBytesLexer` to show that any `IAsyncIterator<Item>` plugs in. |
@@ -59,9 +59,9 @@ The demo binaries print step-by-step parse traces in Debug; in Release the `[Con
 | `examples/Latex.Grammar/` | Library | Shared LaTeX-math grammar: runs the source generator once on `latex.lalr.yaml` and exposes the resulting `Latex` partial class (Schema, AST records, `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this library — one grammar, multiple visitors. |
 | `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math via the shared `Latex.Grammar` library. Visitor renders to Unicode plain text. |
 | `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. Pulls `Console.Lib` (terminal adapters) + `DIR.Lib` (RGBA renderer + font rasterizer + math-layout primitives) from NuGet. |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform runner; `OutputType=Exe`) | 330 tests covering regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, source generator (incl. end-to-end "emit → compile → load → parse"), and parser-semantics regressions. |
+| `LALR.CC.Tests/` | xUnit v3 (Microsoft.Testing.Platform runner; `OutputType=Exe`) | 330 tests covering regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, source generator (incl. end-to-end "emit → compile → load → parse"), and parser-semantics regressions. |
 
-Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic build, etc.) live in `Directory.Build.props`. Don't put them in individual csprojs. NuGet metadata, symbol packages, SourceLink, and the bundled-analyzer pack target live on `CodeProject.Syntax.LALR.csproj` (the only `IsPackable=true` project).
+Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic build, etc.) live in `Directory.Build.props`. Don't put them in individual csprojs. NuGet metadata, symbol packages, SourceLink, and the bundled-analyzer pack target live on `LALR.CC.csproj` (the only `IsPackable=true` project).
 
 ## Architecture: how a parse happens
 
@@ -94,8 +94,8 @@ Grammars are described by:
 - **`PipeBytesLexer` fails fast on unrecognized bytes by default.** Constructor / factories take a `LexerErrorMode` (`Throw` default, `EmitAndStop`, `EmitAndSkip`) and an `errorSymbolId`. `Throw` raises `LexerException` with the offending byte, `SourcePosition`, and lexer state name. The two emit modes require a non-negative `errorSymbolId` and emit an `Item` with `IsError==true` and `Content` set to the hex byte (e.g. `"\x7E"`). Existing callers that passed `cancellationToken` positionally must switch to named-arg form (`cancellationToken: ct`) since the parameter sits after the new mode/id pair.
 - **`Parser.ParseInputAsync` mirrors that pattern.** New `errorMode` parameter (`ParserErrorMode.Throw` default, `Return` keeps the legacy "return offending Item" behavior). On `ActionType.Error`, Throw mode raises `ParseErrorException` carrying the offending `Item`, the LALR(1) state, and the set of symbol ids that *would* have been valid at this state — derived by scanning the parse-table row for non-error cells. Also takes `CancellationToken cancellationToken = default` and checks it once per loop iteration. Same named-arg note: `cancellationToken: ct` is the supported call pattern.
 - **Bug fix while in there:** the parse-error path used `state < 0 ? state : -state` to mark `Item.State` negative — but `-0 == 0`, so an error at the initial state left `IsError==false`. Now uses `-(state+1)` so every error item is genuinely marked as error. Don't depend on the old behavior anywhere.
-- **Schema layer in `CodeProject.Syntax.LALR/Schema/`** is Phase 1 of the YAML-grammars-and-source-generator arc. `GrammarSchema` + `ProductionGroupSchema` + `ProductionSchema` + `LexRuleSchema` are plain POCOs (settable, deserializer-friendly) describing a grammar declaratively. `IRxParser.Parse(string)` turns a small regex dialect (literals, escapes `\n \r \t \\ \. \[ \] etc`, classes `[a-z]`, `[^abc]`, quantifiers `? + * {n} {n,m} {n,}`, groups `(…)`, **no alternation** — express alternatives as multiple lexer rules) into the typed `IRx` AST. `SchemaCompiler.Compile(schema, actions?)` returns `(Grammar, Dictionary<string, LexRule[]>)`, validates symbol references, lexer-instruction mutual-exclusion, missing root state, etc., surfacing every failure as `SchemaCompilationException` with a path-style locator (`productions[1].rules[3].rhs[2]`).
-- **Source generator in `CodeProject.Syntax.LALR.SourceGenerators/`** is Phase 2: a Roslyn `IIncrementalGenerator` (netstandard2.0, `IsRoslynComponent=true`) that reads `*.lalr.yaml` AdditionalFiles, deserializes them via YamlDotNet (build-time only — `PrivateAssets="all"`, never ships to the user binary), and emits a `static partial class XYZ { static GrammarSchema Schema { get; } = new() { … }; }` in the consumer's `RootNamespace`. Class name is derived from the YAML filename (`arithmetic.lalr.yaml` → `Arithmetic`). YAML parse errors surface as Roslyn diagnostic `LALR0001` with file/line locators. The generator references the runtime library's types in *emitted* C# source only — it never compiles against them. Tests in `CodeProject.Syntax.LALR.Tests/SourceGenerators/` drive the generator via `CSharpGeneratorDriver` and include an end-to-end "emit → compile → load → parse" integration test. Generator consumers using `<ProjectReference OutputItemType="Analyzer">` won't get YamlDotNet automatically (it's PrivateAssets); add `<PackageReference Include="YamlDotNet" />` in the consumer's csproj for now (proper analyzer-DLL packaging comes when we publish a NuGet).
+- **Schema layer in `LALR.CC/Schema/`** is Phase 1 of the YAML-grammars-and-source-generator arc. `GrammarSchema` + `ProductionGroupSchema` + `ProductionSchema` + `LexRuleSchema` are plain POCOs (settable, deserializer-friendly) describing a grammar declaratively. `IRxParser.Parse(string)` turns a small regex dialect (literals, escapes `\n \r \t \\ \. \[ \] etc`, classes `[a-z]`, `[^abc]`, quantifiers `? + * {n} {n,m} {n,}`, groups `(…)`, **no alternation** — express alternatives as multiple lexer rules) into the typed `IRx` AST. `SchemaCompiler.Compile(schema, actions?)` returns `(Grammar, Dictionary<string, LexRule[]>)`, validates symbol references, lexer-instruction mutual-exclusion, missing root state, etc., surfacing every failure as `SchemaCompilationException` with a path-style locator (`productions[1].rules[3].rhs[2]`).
+- **Source generator in `LALR.CC.SourceGenerators/`** is Phase 2: a Roslyn `IIncrementalGenerator` (netstandard2.0, `IsRoslynComponent=true`) that reads `*.lalr.yaml` AdditionalFiles, deserializes them via YamlDotNet (build-time only — `PrivateAssets="all"`, never ships to the user binary), and emits a `static partial class XYZ { static GrammarSchema Schema { get; } = new() { … }; }` in the consumer's `RootNamespace`. Class name is derived from the YAML filename (`arithmetic.lalr.yaml` → `Arithmetic`). YAML parse errors surface as Roslyn diagnostic `LALR0001` with file/line locators. The generator references the runtime library's types in *emitted* C# source only — it never compiles against them. Tests in `LALR.CC.Tests/SourceGenerators/` drive the generator via `CSharpGeneratorDriver` and include an end-to-end "emit → compile → load → parse" integration test. Generator consumers using `<ProjectReference OutputItemType="Analyzer">` won't get YamlDotNet automatically (it's PrivateAssets); add `<PackageReference Include="YamlDotNet" />` in the consumer's csproj for now (proper analyzer-DLL packaging comes when we publish a NuGet).
 - **`PrintableList<T>`** in tests is a `List<T>` with `ToString` for friendlier failure messages — use it (not raw `List<T>`) when authoring `MemberData` rows that contain collections.
 
 ## Test framework gotchas (xUnit v3)
@@ -118,7 +118,7 @@ The grammars under `examples/` exist to **exercise the parser/generator pipeline
 Concretely:
 - If a natural-looking grammar fails to parse, **trace the parser** (`new Debug(parser, Console.Out.Write, Console.Error.Write)`) and find the misbehaving table cell, code path, or table-construction step. Fix it there.
 - If `dotnet publish -c Release` emits an AOT trim warning on an example, fix the warning in the runtime (or annotate the API), not by turning AOT off in the example.
-- If the source generator produces awkward emitted code that an example has to paper over, fix the emitter in `CodeProject.Syntax.LALR.SourceGenerators/`.
+- If the source generator produces awkward emitted code that an example has to paper over, fix the emitter in `LALR.CC.SourceGenerators/`.
 - Add a regression test alongside the fix so the case is locked in independently of the example.
 
 The Wikipedia-style LaTeX example (`examples/Latex/`) is the current poster child: its `A -> cmdfrac A A` rule (two non-terminals adjacent in an RHS, separated only by whatever sits inside their internal `{ E }` reductions) was the first grammar to expose a long-standing latent bug where `Parser.cs` stashed `production.Left` (LHS symbol id) on a reduction's `Item.State` instead of the goto-target parser state — the next reduction's `lastState = Peek().State` then mis-routed the goto. The fix landed in `Parser.cs`/`Debug.cs` rather than rewriting the LaTeX grammar.

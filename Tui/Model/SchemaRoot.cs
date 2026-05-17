@@ -1,7 +1,7 @@
-using CodeProject.Syntax.LALR.LexicalGrammar;
-using CodeProject.Syntax.LALR.Schema;
+using LALR.CC.LexicalGrammar;
+using LALR.CC.Schema;
 
-namespace CodeProject.Syntax.LALR.Tui.Model;
+namespace LALR.CC.Tui.Model;
 
 /// <summary>
 /// Combines the grammar and lexer subtrees under a single synthetic root, so

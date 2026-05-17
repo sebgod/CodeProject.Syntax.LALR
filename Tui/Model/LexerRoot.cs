@@ -1,7 +1,7 @@
-using CodeProject.Syntax.LALR.LexicalGrammar;
-using CodeProject.Syntax.LALR.Schema;
+using LALR.CC.LexicalGrammar;
+using LALR.CC.Schema;
 
-namespace CodeProject.Syntax.LALR.Tui.Model;
+namespace LALR.CC.Tui.Model;
 
 /// <summary>
 /// Builds a Node-tree out of a <see cref="GrammarSchema"/>'s lexer table for

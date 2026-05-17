@@ -1,6 +1,6 @@
 name: dotnet
 
-# CI/CD for CodeProject.Syntax.LALR.
+# CI/CD for LALR.CC.
 #
 # Triggers:
 #   - push to master       → restore/build/test, pack, upload nupkg+snupkg as
@@ -43,13 +43,13 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore CodeProject.Syntax.LALR.sln
+        run: dotnet restore LALR.CC.sln
 
       - name: Build (Release)
-        run: dotnet build CodeProject.Syntax.LALR.sln -c Release --no-restore --nologo
+        run: dotnet build LALR.CC.sln -c Release --no-restore --nologo
 
       - name: Test
-        run: dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Release --no-build --nologo
+        run: dotnet test LALR.CC.Tests/LALR.CC.Tests.csproj -c Release --no-build --nologo
 
       # Stage parity check — stage0 (inline grammar) and stage1 (YAML pipeline)
       # must produce byte-identical Accept output. If they diverge, something
@@ -64,7 +64,7 @@ jobs:
 
       - name: Pack
         if: github.event_name == 'push'
-        run: dotnet pack CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj -c Release --no-build --nologo -o packages
+        run: dotnet pack LALR.CC/LALR.CC.csproj -c Release --no-build --nologo -o packages
 
       - name: Upload package artifacts
         if: github.event_name == 'push'
@@ -93,7 +93,7 @@ jobs:
         # which is confusing for consumers.
         run: |
           tag="${GITHUB_REF#refs/tags/v}"
-          csproj_version=$(grep -oP '<Version>\K[^<]+' CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj)
+          csproj_version=$(grep -oP '<Version>\K[^<]+' LALR.CC/LALR.CC.csproj)
           if [ "$tag" != "$csproj_version" ]; then
             echo "::error::Tag v$tag does not match csproj <Version>$csproj_version</Version>"
             exit 1

@@ -1,4 +1,4 @@
-// CodeProject.Syntax.LALR.Tui — terminal UI debugger for LALR grammars.
+// LALR.CC.Tui — terminal UI debugger for LALR grammars.
 //
 // Loads a *.lalr.yaml file, runs it through SchemaCompiler, and shows the
 // resulting Grammar / lexer rules / token stream in a Console.Lib-driven dock
@@ -10,15 +10,15 @@ using System.Text;
 using DIR.Lib;                              // DockStyle
 using SystemConsole = System.Console;       // Console.Lib namespace shadows System.Console
 using CL = global::Console.Lib;
-using CodeProject.Syntax.LALR;
-using CodeProject.Syntax.LALR.LexicalGrammar;
-using CodeProject.Syntax.LALR.Schema;
-using CodeProject.Syntax.LALR.Tui.Model;
+using LALR.CC;
+using LALR.CC.LexicalGrammar;
+using LALR.CC.Schema;
+using LALR.CC.Tui.Model;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace CodeProject.Syntax.LALR.Tui;
+namespace LALR.CC.Tui;
 
 // Three-pane layout: schema (grammar+lexer) on the left, input in the middle,
 // parse tree on the right. Focus determines which pane consumes keystrokes

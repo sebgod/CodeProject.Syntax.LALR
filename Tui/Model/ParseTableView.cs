@@ -1,8 +1,8 @@
-using CodeProject.Syntax.LALR;
-using CodeProject.Syntax.LALR.Schema;
-using CodeProject.Syntax.LALR.LexicalGrammar;
+using LALR.CC;
+using LALR.CC.Schema;
+using LALR.CC.LexicalGrammar;
 
-namespace CodeProject.Syntax.LALR.Tui.Model;
+namespace LALR.CC.Tui.Model;
 
 /// <summary>
 /// Pre-computes the rows for the parse-table view from a built <see cref="Parser"/>.

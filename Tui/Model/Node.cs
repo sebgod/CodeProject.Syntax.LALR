@@ -1,6 +1,6 @@
 using CL = global::Console.Lib;
 
-namespace CodeProject.Syntax.LALR.Tui.Model;
+namespace LALR.CC.Tui.Model;
 
 /// <summary>
 /// Generic tree node for the grammar/lexer trees. Holds a label (the plain-

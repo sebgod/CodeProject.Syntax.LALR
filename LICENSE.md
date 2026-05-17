@@ -4,7 +4,7 @@ This project is licensed under the **Code Project Open License (CPOL) 1.02**.
 
 The full legally-binding text is available:
 
-- In the source repository: [`LICENSE.html`](https://github.com/sebgod/CodeProject.Syntax.LALR/blob/master/LICENSE.html)
+- In the source repository: [`LICENSE.html`](https://github.com/sharpastro/LALR.CC/blob/master/LICENSE.html)
 - Canonical CodeProject reference: <https://www.codeproject.com/info/cpol10.aspx>
 
 ## Summary (non-binding)

@@ -18,12 +18,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CodeProject.Syntax.LALR\CodeProject.Syntax.LALR.csproj" />
+    <ProjectReference Include="..\LALR.CC\LALR.CC.csproj" />
     <!-- Source generator emits Bnf.g.cs / Bnf.Ast.g.cs / Bnf.Visitor.g.cs from
          bnf.lalr.yaml at build time. ReferenceOutputAssembly=false because the
          generator's analyzer DLL only runs during compilation; it doesn't ship
          in the AOT publish output. -->
-    <ProjectReference Include="..\CodeProject.Syntax.LALR.SourceGenerators\CodeProject.Syntax.LALR.SourceGenerators.csproj"
+    <ProjectReference Include="..\LALR.CC.SourceGenerators\LALR.CC.SourceGenerators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>

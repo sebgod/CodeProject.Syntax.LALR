@@ -1,4 +1,4 @@
-# CodeProject.Syntax.LALR
+# LALR.CC
 
 A modernized LALR(1) parser-table generator and runtime for C#, originally adapted
 from Phillip Voyle's CodeProject article
@@ -21,7 +21,7 @@ visitor surface at build time.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="CodeProject.Syntax.LALR" Version="2.0.0" />
+  <PackageReference Include="LALR.CC" Version="2.0.0" />
   <AdditionalFiles  Include="grammar.lalr.yaml" />
 </ItemGroup>
 ```
@@ -55,9 +55,9 @@ The generator emits a partial class named after the YAML file
 record per action, and an `IVisitor` interface:
 
 ```csharp
-using CodeProject.Syntax.LALR;
-using CodeProject.Syntax.LALR.LexicalGrammar;
-using CodeProject.Syntax.LALR.Schema;
+using LALR.CC;
+using LALR.CC.LexicalGrammar;
+using LALR.CC.Schema;
 
 class Calc : Grammar.IVisitor<int>
 {
@@ -128,8 +128,8 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 
 | Project | Type | Purpose |
 |---|---|---|
-| `CodeProject.Syntax.LALR/` | Library (net10.0, AOT-compatible, trimmable) | Grammar model, LALR(1) parse-table generator, runtime parser, lexer infrastructure (`PipeBytesLexer`, `IRx` combinators, byte-DFA compiler), `Item` value type, `Schema/` POCOs + compiler. **The published NuGet package**. |
-| `CodeProject.Syntax.LALR.SourceGenerators/` | Roslyn analyzer (netstandard2.0, `IsRoslynComponent=true`) | YAML grammar source generator. Reads `*.lalr.yaml` AdditionalFiles at build time, emits `<ClassName>.g.cs` (schema), `<ClassName>.Ast.g.cs` (record per action), and `<ClassName>.Visitor.g.cs` (typed `IVisitor` interface + `BuildActions`). YamlDotNet is build-time only. |
+| `LALR.CC/` | Library (net10.0, AOT-compatible, trimmable) | Grammar model, LALR(1) parse-table generator, runtime parser, lexer infrastructure (`PipeBytesLexer`, `IRx` combinators, byte-DFA compiler), `Item` value type, `Schema/` POCOs + compiler. **The published NuGet package**. |
+| `LALR.CC.SourceGenerators/` | Roslyn analyzer (netstandard2.0, `IsRoslynComponent=true`) | YAML grammar source generator. Reads `*.lalr.yaml` AdditionalFiles at build time, emits `<ClassName>.g.cs` (schema), `<ClassName>.Ast.g.cs` (record per action), and `<ClassName>.Visitor.g.cs` (typed `IVisitor` interface + `BuildActions`). YamlDotNet is build-time only. |
 | `Bootstrap/` | Exe (`PublishAot=true`) | **Stage 0**: hand-codes the BNF meta-grammar in C# and parses a BNF source string with the resulting parser. Reference implementation — depends only on the runtime library, no generator, no YAML. |
 | `Bootstrap.Stage1/` | Exe (`PublishAot=true`) | **Stage 1**: same BNF meta-grammar, but defined in `bnf.lalr.yaml` and consumed via the source generator + visitor pipeline. CI diffs stage0 ↔ stage1 Accept output for byte-identical parity. |
 | `TestProject/` | Exe (`PublishAot=true`) | Arithmetic-expression demo with operator precedence and constant folding during reduction. Inline C# grammar; uses an inline tokenizer instead of `PipeBytesLexer` to show that any `IAsyncIterator<Item>` plugs in. |
@@ -139,11 +139,11 @@ This fork keeps the algorithmic core but pursues a different set of properties:
 | `examples/Latex.Grammar/` | Library | Shared LaTeX grammar partial class. Source generator runs once on `latex.lalr.yaml` and emits the `Latex` partial (Schema + AST records + `IVisitor<T>`). Both LaTeX consumers `ProjectReference` this — one grammar, multiple visitors. |
 | `examples/Latex/` | Exe (`PublishAot=true`) | Wikipedia-style LaTeX math formulas via the shared `Latex.Grammar`. Visitor renders to Unicode plain text. |
 | `examples/LatexConsole/` | Exe (`PublishAot=true`) | Same LaTeX grammar, different visitor: builds a `DIR.Lib.MathLayout.Box` tree (TeX-style box layout — fraction bars, scalable square-root vinculums, baseline-aligned scripts, big-operator limits) and `Console.Lib.BoxRenderer` paints it as sixel / Unicode sextant blocks / half-block ASCII art. NuGet deps: `Console.Lib` (terminal adapters) → `DIR.Lib` (RGBA renderer + font rasteriser + math-layout primitives). |
-| `CodeProject.Syntax.LALR.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 330 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
+| `LALR.CC.Tests/` | xUnit v3 (Microsoft.Testing.Platform) | 330 tests covering the regex-AST builders, byte/codepoint DFAs, lexer/parser pipeline, diagnostics, schema layer, the source generator (incl. end-to-end "emit → compile → load → parse"), and parser semantics regressions. |
 
 Shared MSBuild settings (`TargetFramework=net10.0`, `LangVersion=14`, deterministic
 build, etc.) live in `Directory.Build.props`. NuGet metadata, symbol packages,
-SourceLink, and the bundled-analyzer pack target live on `CodeProject.Syntax.LALR.csproj`.
+SourceLink, and the bundled-analyzer pack target live on `LALR.CC.csproj`.
 
 ---
 
@@ -313,9 +313,9 @@ and feeds the result to a `Parser`. See the Quick start above and `examples/Json
 for a worked example. `bnf.lalr.yaml` (Bootstrap.Stage1) is a larger reference
 showing a multi-state lexer (push-pop quoted strings) and 17 actions.
 
-The YAML schema is documented inline in `CodeProject.Syntax.LALR/Schema/GrammarSchema.cs`.
+The YAML schema is documented inline in `LALR.CC/Schema/GrammarSchema.cs`.
 The regex dialect for `match:` patterns is described in
-`CodeProject.Syntax.LALR/Schema/IRxParser.cs` — it's deliberately small (no
+`LALR.CC/Schema/IRxParser.cs` — it's deliberately small (no
 alternation; express alternatives as multiple lexer rules).
 
 ---
@@ -413,13 +413,13 @@ run, two completely different output channels.
 
 ```bash
 # Build the whole solution
-dotnet build CodeProject.Syntax.LALR.sln -c Debug          # or -c Release
+dotnet build LALR.CC.sln -c Debug          # or -c Release
 
 # Run all tests (xUnit v3 on Microsoft.Testing.Platform — 330 tests)
-dotnet test CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug
+dotnet test LALR.CC.Tests/LALR.CC.Tests.csproj -c Debug
 
 # Run a subset of tests (MTP --filter-method, glob-syntax)
-dotnet run --project CodeProject.Syntax.LALR.Tests/CodeProject.Syntax.LALR.Tests.csproj -c Debug -- --filter-method "*PipeBytesLexer*"
+dotnet run --project LALR.CC.Tests/LALR.CC.Tests.csproj -c Debug -- --filter-method "*PipeBytesLexer*"
 
 # Run the demos / examples end-to-end
 dotnet run --project Bootstrap/Bootstrap.csproj                    -c Release    # stage 0 (inline grammar)
@@ -429,7 +429,7 @@ dotnet run --project examples/Calculator/Examples.Calculator.csproj -c Release  
 dotnet run --project examples/Json/Examples.Json.csproj            -c Release    # real JSON via visitor
 dotnet run --project examples/Latex/Examples.Latex.csproj          -c Release    # Wikipedia-style math → Unicode
 dotnet run --project examples/LatexConsole/Examples.LatexConsole.csproj -c Release  # same grammar → terminal raster
-dotnet run --project Tui/CodeProject.Syntax.LALR.Tui.csproj        -c Release    # interactive grammar debugger (lalr-tui)
+dotnet run --project Tui/LALR.CC.Tui.csproj        -c Release    # interactive grammar debugger (lalr-tui)
 
 # Native AOT publish (verifies library + AOT-flagged consumers stay AOT-clean)
 dotnet publish Bootstrap/Bootstrap.csproj                                -c Release
@@ -438,7 +438,7 @@ dotnet publish TestProject/TestProject.csproj                            -c Rele
 dotnet publish examples/LatexConsole/Examples.LatexConsole.csproj        -c Release
 
 # Local NuGet pack (runtime + bundled source generator + YamlDotNet)
-dotnet pack CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj -c Release -o packages
+dotnet pack LALR.CC/LALR.CC.csproj -c Release -o packages
 ```
 
 The demo binaries print step-by-step parse traces in Debug; in Release the
@@ -455,7 +455,7 @@ is printed.
   to NuGet using the `NUGET_SECRET` repo secret (`--skip-duplicate` for
   idempotent re-runs). The `.snupkg` is auto-routed to symbols.nuget.org.
 
-To cut a release: bump `<Version>` in `CodeProject.Syntax.LALR/CodeProject.Syntax.LALR.csproj`,
+To cut a release: bump `<Version>` in `LALR.CC/LALR.CC.csproj`,
 commit, tag `vX.Y.Z` matching the version, push the tag.
 
 ---
