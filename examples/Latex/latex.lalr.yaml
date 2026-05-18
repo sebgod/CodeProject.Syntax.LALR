@@ -65,7 +65,13 @@ symbols:
   - cmd        # 20  catchall \name — Greek letters, function names, big operators
   - cmdfrac    # 21  \frac (binds two atom arguments)
   - cmdsqrt    # 22  \sqrt (binds one atom argument)
-  - WS         # 23  whitespace (ignored)
+  - rel        # 23  binary relation: \approx \leq \geq \neq \equiv \ll \gg
+                    # \in \notin \subset \to \leftarrow \rightarrow \pm \mp.
+                    # Distinct from `cmd` so the parser folds them as proper
+                    # binary operators via E → E rel T, not as juxtaposed
+                    # atoms (which would lose surrounding whitespace and
+                    # render "γ≈1" instead of "γ ≈ 1" downstream).
+  - WS         # 24  whitespace (ignored)
 
 productions:
   # Start production. Single-non-terminal so it trims at parse time and the
@@ -75,12 +81,16 @@ productions:
       - { lhs: S, rhs: [E] }
 
   # Additive / relational. `=` is folded in here at the lowest precedence so
-  # `a + b = c + d` parses as expected; mathematicians can quibble.
+  # `a + b = c + d` parses as expected; mathematicians can quibble. The `rel`
+  # arm covers \approx / \leq / \geq / ... — keeping it next to `=` puts all
+  # comparison-style operators at the same precedence level, which matches
+  # standard math reading order ("a + b ≈ c" binds + tighter than ≈).
   - derivation: leftmost
     rules:
-      - { lhs: E, rhs: [E, '+', T], action: add }
-      - { lhs: E, rhs: [E, '-', T], action: subtract }
-      - { lhs: E, rhs: [E, '=', T], action: eq }
+      - { lhs: E, rhs: [E, '+', T],  action: add }
+      - { lhs: E, rhs: [E, '-', T],  action: subtract }
+      - { lhs: E, rhs: [E, '=', T],  action: eq }
+      - { lhs: E, rhs: [E, rel, T],  action: rel }
       - { lhs: E, rhs: [T] }
 
   # Multiplicative + juxtaposition. The `T -> T F2` rule is the implicit-
@@ -140,6 +150,26 @@ lexer:
     - { symbol: cmdsqrt, match: '\\sqrt' }
     - { symbol: '*',     match: '\\cdot' }
     - { symbol: '*',     match: '\\times' }
+    # Binary relations. Must precede the `\\[a-zA-Z]+` catchall so on the
+    # tied-length cases (e.g. input `\approx`) the `rel` rule wins by
+    # first-rule-wins. Longer real names like `\approxer` still go to `cmd`
+    # via longest-match. Order within this group doesn't matter — each is
+    # a literal token, no overlap.
+    - { symbol: rel,     match: '\\approx' }
+    - { symbol: rel,     match: '\\equiv' }
+    - { symbol: rel,     match: '\\leq' }
+    - { symbol: rel,     match: '\\geq' }
+    - { symbol: rel,     match: '\\neq' }
+    - { symbol: rel,     match: '\\ll' }
+    - { symbol: rel,     match: '\\gg' }
+    - { symbol: rel,     match: '\\in' }
+    - { symbol: rel,     match: '\\notin' }
+    - { symbol: rel,     match: '\\subset' }
+    - { symbol: rel,     match: '\\to' }
+    - { symbol: rel,     match: '\\leftarrow' }
+    - { symbol: rel,     match: '\\rightarrow' }
+    - { symbol: rel,     match: '\\pm' }
+    - { symbol: rel,     match: '\\mp' }
     - { symbol: cmd,     match: '\\[a-zA-Z]+' }
     - { symbol: n,       match: '[0-9]+(\.[0-9]+)?' }
     - { symbol: id,      match: '[a-zA-Z]' }

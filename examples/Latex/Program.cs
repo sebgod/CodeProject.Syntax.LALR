@@ -36,6 +36,14 @@ internal static class Program
         "\\sin(\\alpha + \\beta) = \\sin\\alpha \\cos\\beta + \\cos\\alpha \\sin\\beta",
         "a_{n+1} = a_n + a_{n-1}",
         "\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}",
+        // Binary relations — exercise the rel-production added in v3.1.
+        // Each should render with proper outer spaces around the glyph.
+        "\\gamma \\approx 1 + \\frac{v^2}{2c^2}",
+        "v \\ll c",
+        "a \\leq b \\leq c",
+        "x \\in S",
+        "A \\to B",  // `:` isn't in the math grammar — keeping the sample lex-clean
+        "a \\pm b",
     ];
 
     public static void Main()
@@ -100,6 +108,14 @@ internal static class Program
         public string Visit(Div node)      => $"{node.Arg0.Content}/{node.Arg2.Content}";
         public string Visit(Juxt node)     => $"{node.Arg0.Content}{node.Arg1.Content}";
         public string Visit(Neg node)      => $"−{node.Arg1.Content}";
+
+        // Binary relation (\approx \leq \geq \neq \equiv \ll \gg \in ...).
+        // Arg1 is the rel token itself — render via the same RenderCommand
+        // lookup (which now maps just the bare glyph "≈" etc., no padding —
+        // the surrounding spaces come from the format string here, the
+        // structural place where they belong).
+        public string Visit(Rel node) =>
+            $"{node.Arg0.Content} {RenderCommand((string)node.Arg1.Content)} {node.Arg2.Content}";
 
         // Scripts: try Unicode super/subscripts when the argument is short and
         // every codepoint has a Unicode form. Otherwise fall back to caret /
@@ -247,6 +263,10 @@ internal static class Program
             ["approx"] = "≈", ["equiv"] = "≡",
             ["in"] = "∈", ["notin"] = "∉", ["subset"] = "⊂",
             ["cup"] = "∪", ["cap"] = "∩",
+            // Much-less-than / much-greater-than. Mapped as proper `rel`
+            // tokens in latex.lalr.yaml; this entry gives the visitor the
+            // bare glyph to splice between the operand strings.
+            ["ll"] = "≪", ["gg"] = "≫",
         };
 
         // Unicode super/subscript tables — only entries that exist as proper
